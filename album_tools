@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python3
+#!/usr/bin/env python3
 # album_tools.py 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
@@ -26,7 +26,8 @@ from mutagen.easyid3 import EasyID3
 
 
 ## Set the global values 
-music_root = "/data/data/com.termux/files/home/SD/Music/"
+# Set 'music_root' to your music collection directory. 
+music_root = "~/Music/"
 os.chdir(music_root)
 tmp_dir = music_root+"tmp/"
 disallowed_chars = re.compile(r"[^\w\s.-]")
@@ -86,7 +87,7 @@ def get_unique_dates(dates: list) -> int:
 
 def get_all_dates(directory: str) -> dict:
     """
-    Returns a dictioniary of file:date tags from all files in {directory}
+    Returns a dictionary of file:date tags from all files in {directory}
     """
     files = get_files_in_dir(directory)
     dates = {}
@@ -192,7 +193,8 @@ def get_album_cover(directory: str, file_name: str, url: str):
     """
     Download a file such as an album cover
     """
-    WGET = '/data/data/com.termux/files/usr/bin/wget'
+    # Set the location of wget. 
+    WGET = '/usr/bin/wget'
 
     try:
         proc.run([WGET, '-O', directory+'/'+file_name, url])
@@ -207,7 +209,8 @@ def do_yt_dlp(url: str):
     """
     Download an album or track with `yt-dlp`
     """
-    YTD = '/data/data/com.termux/files/usr/bin/yt-dlp'
+    # Set location of yt-dlp. 
+    YTD = '/usr/bin/yt-dlp'
     TMP_PATH = tmp_dir
 
     try:
@@ -223,8 +226,9 @@ def do_batch_rip():
     """
     Re-encode /Musci/tmp/* as Ogg Vorbis
     """
-    BASH = '/data/data/com.termux/files/usr/bin/bash'
-    RIP = '/data/data/com.termux/files/home/bin/rip_tmp'
+    # Set locations of bash and rip_tmp. 
+    BASH = '/usr/bin/bash'
+    RIP = '~/bin/rip_tmp'
 
     try:
         proc.run([BASH, RIP])
@@ -328,7 +332,8 @@ def open_shell():
     Open an interactive shell in cwd.
     """
 
-    BASH = '/data/data/com.termux/files/usr/bin/bash'
+    # Set location of bash. 
+    BASH = '/usr/bin/bash'
 
     try:
         proc.run([BASH, '-i'])
@@ -406,7 +411,7 @@ def main():
             new = input("Enter new date (YYYY): ")
             print("You have chosen to change this album's date to "+new)
             ans = input("Continue? [y/N]")
-            if ans == 'y':
+            if ans.lower() == 'y':
                 print("Changing dates in /Music/"+name)
                 set_all_dates(full_name, new)
                 all_dates = get_all_dates(full_name)
@@ -448,9 +453,11 @@ def main():
                 break
 
             print(f"Re-encode tracks in {music_root}tmp/ as Ogg Vorbis?")
-            ans2 = input("[y/N] ")
+            ans2 = input("[Y/n] ")
 
-            if ans2.lower() == 'y':
+            if ans2.lower() == 'n':
+                break
+            elif ans2.lower() == 'y':
                 print("Ripping to Ogg Vorbis...")
                 do_batch_rip()
                 print("Re-encoding complete.")

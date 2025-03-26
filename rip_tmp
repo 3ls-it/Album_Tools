@@ -1,7 +1,7 @@
-#!/data/data/com.termux/files/usr/bin/bash 
+#!/usr/bin/bash 
 
 # change dir to tmp 
-work_dir="$HOME/SD/Music/tmp/"
+work_dir="$HOME/Music/tmp/" # Set to your music directory
 cd $work_dir
 
 # Loop through all files in the given directory 
