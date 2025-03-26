@@ -227,7 +227,6 @@ def do_batch_rip():
     """
     Re-encode /Musci/tmp/* as Ogg Vorbis
     """
-    # Set locations of bash and rip_tmp. 
 
     try:
         proc.run([BASH, RIP, tmp_dir])
@@ -252,7 +251,6 @@ def build_histogram(dates: list):
     plt.xlabel = "Album Years"
     axs.hist(dates, bins=n_bins)
     axs.set_xlabel("Album Years")
-    #plt.show()
     stamp = datetime.now().replace(microsecond=0).isoformat().replace('-','').replace(':','')
     plt.savefig(music_root+'music_collection_dates-'+stamp+'.png')
 # End build_histogram() 
@@ -330,9 +328,6 @@ def open_shell():
     """
     Open an interactive shell in cwd.
     """
-
-    # Set location of bash. 
-    BASH = '/usr/bin/bash'
 
     try:
         proc.run([BASH, '-i'])
