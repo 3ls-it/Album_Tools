@@ -1,7 +1,12 @@
 #!/usr/bin/bash 
 
+if [ $# -ne 1 ]; then
+    echo "Music directory path is required."
+    exit 1
+fi
+
 # change dir to tmp 
-work_dir="$HOME/Music/tmp/" # Set to your music directory
+work_dir="$1/tmp/" # Set to your music directory
 cd $work_dir
 
 # Loop through all files in the given directory 

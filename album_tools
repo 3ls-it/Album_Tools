@@ -231,7 +231,7 @@ def do_batch_rip():
     RIP = '~/bin/rip_tmp'
 
     try:
-        proc.run([BASH, RIP])
+        proc.run([BASH, RIP, tmp_dir])
     except ChildProcessError as e:
         print("In album_tools")
         print(e)
