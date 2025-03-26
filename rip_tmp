@@ -1,0 +1,30 @@
+#!/data/data/com.termux/files/usr/bin/bash 
+
+# change dir to tmp 
+work_dir="$HOME/SD/Music/tmp/"
+cd $work_dir
+
+# Loop through all files in the given directory 
+for file in *; do
+  # Check if the item is a file 
+  if [[ -f "$file" ]]; then
+    # Extract the file name without the extension 
+    filename="${file%.*}"
+
+    # Construct the output file name 
+    output_file="${filename}.ogg"
+
+    # Run ffmpeg  
+	echo "Attempting to extract audio channel from $file..."
+    ffmpeg -i "$file" -q:a 0 -map a "$output_file" 2>/dev/null
+
+    # Check if ffmpeg command was successful 
+    if [[ $? -ne 0 ]]; then
+      echo "Error processing $file. Continuing to next file."
+	  echo ""
+    else
+      echo "Successfully re-encoded $file to $output_file."
+	  echo ""
+    fi
+  fi
+done
