@@ -30,7 +30,13 @@ from mutagen.easyid3 import EasyID3
 music_root = "~/Music/"
 os.chdir(music_root)
 tmp_dir = music_root+"tmp/"
+BASH = '/usr/bin/bash'
+RIP = '~/bin/rip_tmp'
+WGET = '/usr/bin/wget'
+YTD = '/usr/bin/yt-dlp'
+
 disallowed_chars = re.compile(r"[^\w\s.-]")
+
 
 # Function for readline to handle filename completion 
 def completer(text, state):
@@ -193,8 +199,6 @@ def get_album_cover(directory: str, file_name: str, url: str):
     """
     Download a file such as an album cover
     """
-    # Set the location of wget. 
-    WGET = '/usr/bin/wget'
 
     try:
         proc.run([WGET, '-O', directory+'/'+file_name, url])
@@ -209,12 +213,9 @@ def do_yt_dlp(url: str):
     """
     Download an album or track with `yt-dlp`
     """
-    # Set location of yt-dlp. 
-    YTD = '/usr/bin/yt-dlp'
-    TMP_PATH = tmp_dir
 
     try:
-        proc.run([YTD, '-P', TMP_PATH, url])
+        proc.run([YTD, '-P', tmp_dir, url])
     except ChildProcessError as e:
         print(e)
     except Exception as e:
@@ -227,8 +228,6 @@ def do_batch_rip():
     Re-encode /Musci/tmp/* as Ogg Vorbis
     """
     # Set locations of bash and rip_tmp. 
-    BASH = '/usr/bin/bash'
-    RIP = '~/bin/rip_tmp'
 
     try:
         proc.run([BASH, RIP, tmp_dir])
