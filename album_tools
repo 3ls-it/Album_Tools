@@ -450,8 +450,10 @@ def main():
             ans2 = input("[Y/n] ")
 
             if ans2.lower() == 'n':
+                print("\nSkipping re-encoding. Leaving downloaded files in /Music/tmp/")
+                input("ENTER to contiue.") 
                 break
-            elif ans2.lower() == 'y':
+            else:
                 print("Ripping to Ogg Vorbis...")
                 do_batch_rip()
                 print("Re-encoding complete.")
@@ -471,9 +473,6 @@ def main():
                 # Clear tmp/ 
                 shutil.rmtree(tmp_dir)
                 input("\nDone. ENTER to contiue.")
-            else:
-                print("\nSkipping re-encoding. Leaving downloaded files in /Music/tmp/")
-                input("ENTER to contiue.") 
 
         elif action == '7':
             # Download file 
