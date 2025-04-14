@@ -3,6 +3,10 @@
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
 
+# Colors: 
+# pale yellow #f5d676
+# dark burnt red #681c2c
+
 import glob
 import os
 import re
@@ -13,6 +17,7 @@ import sys
 
 from collections import Counter
 from datetime import datetime
+from rich import print
 
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -251,6 +256,7 @@ def build_histogram(dates: list):
     plt.xlabel = "Album Years"
     axs.hist(dates, bins=n_bins)
     axs.set_xlabel("Album Years")
+    #plt.show()
     stamp = datetime.now().replace(microsecond=0).isoformat().replace('-','').replace(':','')
     plt.savefig(music_root+'music_collection_dates-'+stamp+'.png')
 # End build_histogram() 
@@ -374,26 +380,28 @@ def main():
         print(" 9 = Scrub all directory names in /Music/")
         print(f"10 = Scrub all filenames in '{name}' directory")
         print("11 = Generate date histogram for collection")
-        print("sh = Open shell") 
-        print(" q = Quit\n")
+        print("[bold cyan]sh[/bold cyan] = Open shell") 
+        print(" [bold cyan]q[/bold cyan] = Quit\n")
 
         action = input("/Music/"+name+"> ")
 
         if action == '1':
             # List files in dir 
+            # #f5d676 = pale yellow 
             ls = get_files_in_dir(full_name)
             print("")
-            print(f"{len(ls)} files in {name}:")
+            print(f"[bold blue]{len(ls)} files in {name}:[/bold blue]")
             for f in ls:
-                print(os.path.basename(f))
+                fname = os.path.basename(f)
+                print(f"[#f5d676]{fname}[/#f5d676]")
             input("\nENTER to continue")
 
         elif action == '2':
             # List dates for all tracsk in dir 
             all_dates = get_all_dates(full_name)
-            print("Dates in /Music/"+name)
+            print("\nDates in /Music/"+name)
             for f, d in all_dates.items():
-                print(f"{f}: {d}")
+                print(f"[#681c2c]{d}: [/#681c2c] [#f5d676]{f}[/#f5d676]")
             input("\nENTER to continue")
 
         elif action == '3':
