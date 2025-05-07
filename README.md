@@ -1,9 +1,31 @@
-  This command-line based tool is purely designed to meet my own needs. Your mileage may vary.  
-  
-  It was build and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. As such, any site|service that `yt-dlp` supports, is supported by `album_tools`. You will also need `wget` installed for downloading album cover art.    
-   
-  My personal choice of sound file is Ogg Vorbis. If you'd like to use this tool, but prefer a different file format, adjust this in the `rip_tmp` and `batch_rip` shell scripts by changing the file extension for the output file in the `FFMPEG` arguments.   
-     
-  At the top of `album_tools` you will need to provide the path to your music collection directory, as well as the path to `bash`, `wget`, and `yt-dlp`.  
+## Album Tools  
 
-  This started as a way for me to created a histogram of all the album dates in my collection, and grew into something else. (As often happens!)
+### About  
+
+  `album-tools` is terminal based tool, whch is designed solely to meet my own needs. Your mileage may vary. This started as a way for me to created a histogram of all the album dates in my collection, and grew into something else. (As often happens!)  
+  
+  It was build and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. As such, any site|service that `yt-dlp` supports, is supported by `album-tools`.  
+   
+  Before using you will need to set the correct values for these variables:  
+```python
+music_root = "/path_to_your_music_collection/"
+# Set paths
+SHELL = '/usr/bin/bash'
+FFMPEG = '/usr/bin/ffmpeg'
+# Set bit-rate and encoding
+BITRATE = '192' # Default for Ogg Vorbis
+CODEC = 'vorbis' # or 'mp3' 
+```  
+
+### Features
+
+- Interactive command-line menu to manage your music collection
+- List files in an album directory, view dates, and apply metadata changes in bulk
+- Download audio from any source supported by yt-dlp with FFmpeg post-processing
+- Download album covers or other files (with a progress bar!)
+- Scrub directory and file names to remove disallowed characters
+- Generate album-year histograms saved as PNG using matplotlib
+- Escape to an interactive shell at any time from within the app
+- Tab-completion for filesystem paths while entering commands
+- Coloured output for improved readability
+- Configurable file format (OGG, MP3) and bitrate settings

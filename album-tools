@@ -3,7 +3,7 @@
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
 
-# Colors: 
+# Colours: 
 # pale yellow #f5d676
 # dark burnt red #681c2c
 
@@ -14,15 +14,15 @@ import readline
 import shutil
 import subprocess as proc
 import sys
-
 from collections import Counter
 from datetime import datetime
 from rich import print
-
+import requests
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import colors
 from matplotlib.ticker import PercentFormatter
-
+import yt_dlp
 from mutagen.oggvorbis import OggVorbis
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, TDRC
@@ -31,14 +31,17 @@ from mutagen.easyid3 import EasyID3
 
 
 ## Set the global values 
+__version__ = 'v0.1.0'
 # Set 'music_root' to your music collection directory. 
-music_root = "~/Music/"
+music_root = "/Music/"
 os.chdir(music_root)
-tmp_dir = music_root+"tmp/"
-BASH = '/usr/bin/bash'
-RIP = '~/bin/rip_tmp'
-WGET = '/usr/bin/wget'
-YTD = '/usr/bin/yt-dlp'
+tmp_dir = f"{music_root}tmp/"
+# Set paths 
+SHELL = '/usr/bin/bash'
+FFMPEG = '/usr/bin/ffmpeg'
+# Set bit-rate and encoding 
+BITRATE = '192' # Default for Ogg Vorbis 
+CODEC = 'vorbis' # or 'mp3' 
 
 disallowed_chars = re.compile(r"[^\w\s.-]")
 
@@ -61,7 +64,6 @@ def completer(text, state):
 readline.set_completer(completer)
 # Use the tab key for completion
 readline.parse_and_bind('tab: complete')
-
 
 
 ## Helper Functions 
@@ -206,42 +208,50 @@ def get_album_cover(directory: str, file_name: str, url: str):
     """
 
     try:
-        proc.run([WGET, '-O', directory+'/'+file_name, url])
-    except ChildProcessError as e:
-        print(e)
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        total_size = int(response.headers.get('content-length', 0))
+        file_path = os.path.join(directory, file_name)
+        os.makedirs(directory, exist_ok=True)
+        with open(file_path, 'wb') as f, tqdm(total=total_size, unit='B',
+                                              unit_scale=True, desc=file_name) as pbar:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    pbar.update(len(chunk))
+    except requests.RequestException as e:
+        print(f"Error downloading {url}: {e}")
     except Exception as e:
         print(e)
 # End get_album_cover() 
 
 
-def do_yt_dlp(url: str):
+def do_yt_dlp(url: str, output_template: str = "%(title)s.%(ext)s",
+              quality: str = BITRATE, ffmpeg_location: str = FFMPEG) -> dict:
     """
-    Download an album or track with `yt-dlp`
+    Download an album or track with yt-dlp
     """
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": output_template,
+        **({"ffmpeg_location": ffmpeg_location} if ffmpeg_location else {}),
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": CODEC,
+                "preferredquality": quality,
+            },
+            {
+                "key": "FFmpegMetadata",
+            },
+        ],
+        "retries": 10
+    }
 
-    try:
-        proc.run([YTD, '-P', tmp_dir, url])
-    except ChildProcessError as e:
-        print(e)
-    except Exception as e:
-        print(e)
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info: dict = ydl.extract_info(url, download=True)
+        return info
 # End do_yt_dlp() 
-
-
-def do_batch_rip():
-    """
-    Re-encode /Musci/tmp/* as Ogg Vorbis
-    """
-
-    try:
-        proc.run([BASH, RIP, tmp_dir])
-    except ChildProcessError as e:
-        print("In album_tools")
-        print(e)
-    except Exception as e:
-        print("In album_tools")
-        print(e)
-# End do_batch_rip() 
 
 
 def build_histogram(dates: list):
@@ -335,14 +345,21 @@ def open_shell():
     Open an interactive shell in cwd.
     """
 
+    # Launch an interactive shell in the current working directory
+    cmd = [SHELL, '-i']
     try:
-        proc.run([BASH, '-i'])
-    except ChildProcessError as e:
-        print("In album_tools")
-        print(e)
+        proc.run(cmd, check=True)
+    except FileNotFoundError:
+        print(f"[bold red]Shell executable not found[/bold red]: [cyan]{SHELL}[/cyan]")
+    except PermissionError:
+        print(f"[bold red]Permission denied[/bold red] when launching: [cyan]{SHELL}[/cyan]")
+    except proc.CalledProcessError as e:
+        print(f"[bold yellow]Shell exited with code[/bold yellow] [magenta]{e.returncode}[/magenta]")
     except Exception as e:
-        print("In album_tools")
-        print(e)
+        print(f"[bold red]Unexpected error launching shell[/bold red]: [white]{e}[/white]")
+    # Pause so the user can read the error before the menu clears  
+    print("[bold green]Enter to return to the menu[/bold green]")
+    input()
 # End open_shell() 
 
 
@@ -394,93 +411,97 @@ def main():
             for f in ls:
                 fname = os.path.basename(f)
                 print(f"[#f5d676]{fname}[/#f5d676]")
-            input("\nENTER to continue")
+            print("[bold green]\nENTER to continue[/bold green]")
+            input()
 
         elif action == '2':
             # List dates for all tracsk in dir 
             all_dates = get_all_dates(full_name)
-            print("\nDates in /Music/"+name)
+            print(f"[bold blue]\nDates in /Music/{name}[/bold blue]")
             for f, d in all_dates.items():
-                print(f"[#681c2c]{d}: [/#681c2c] [#f5d676]{f}[/#f5d676]")
-            input("\nENTER to continue")
+                print(f"[bold white]{d}: [/bold white] [#f5d676]{f}[/#f5d676]")
+            print("[bold green]\nENTER to continue[/bold green]")
+            input()
 
         elif action == '3':
             # Set dates on all tracks 
             if full_name == music_root:
-                print("Don't change the dates of all files in /Music/!")
-                input("\nENTER to continue")
+                print("[bold red]Don't change the dates of all files in /Music/![/bold red]")
+                print("[bold green]\nENTER to continue[/bold green]")
+                input()
                 continue
             new = input("Enter new date (YYYY): ")
-            print("You have chosen to change this album's date to "+new)
-            ans = input("Continue? [y/N]")
+            print(f"You have chosen to change this album's date to {new}")
+            print("[bold green]Continue? [y/N][/bold green]")
+            ans = input()
             if ans.lower() == 'y':
-                print("Changing dates in /Music/"+name)
+                print(f"Changing dates in /Music/{name}")
                 set_all_dates(full_name, new)
                 all_dates = get_all_dates(full_name)
                 print(f"All dates in {name} changed to {new}.")
-                input("\nENTER to continue")
+                print("[bold green]\nENTER to continue[/bold green]")
+                input()
             else:
-                input("\nAborting. ENTER to continue.")
+                print("[bold red]\nAborting. ENTER to continue.[/bold red]")
+                input()
                 continue
 
         elif action == '4':
             # Set common tags 
             set_all_common(full_name)
-            input("\nENTER to continue")
+            print("[bold green]\nENTER to continue[/bold green]")
+            input()
 
         elif action == '5':
             # Make new dir 
             print("Create a new directory under /Music/")
             dirname = input("New directory name: ")
-            fulldir = music_root+"/"+dirname
-            ans = input("Create? [y/N] ")
+            fulldir = f"{music_root}/{dirname}"
+            print("[bold green]Create? [y/N] [/bold green]")
+            ans = input()
 
             if ans.lower() == 'y':
                 os.mkdir(fulldir)
-                input("\nCreated "+fulldir, "ENTER to continue")
+                print("[bold green]\nCreated {fulldir}, ENTER to continue[/bold green]")
+                input()
 
         elif action == '6':
-            # Download album with `yt-dlp` 
+            # Download album or track 
             url = input("Album URL: ")
             print(f"Download album to {music_root}tmp/?")
             ans = input("[y/N] ")
 
             if ans.lower() == 'y':
-                if not check_dir_exists(music_root+"tmp/"):
-                    os.mkdir(music_root+"tmp/")
+                if not check_dir_exists(f"{music_root}tmp/"):
+                    os.mkdir(f"{music_root}tmp/")
+                os.chdir(tmp_dir)
                 print("Downloading...")
                 do_yt_dlp(url)
-                input("\nAlbum download complete")
+                print("[bold green]\nAlbum download complete[/bold green]")
+                input()
             else:
                 break
 
-            print(f"Re-encode tracks in {music_root}tmp/ as Ogg Vorbis?")
-            ans2 = input("[Y/n] ")
+            # Move dloaded files into album directory 
+            target_dir = input("\nName of directory to which the files will be moved: ")
 
-            if ans2.lower() == 'n':
-                print("\nSkipping re-encoding. Leaving downloaded files in /Music/tmp/")
-                input("ENTER to contiue.") 
-                break
-            else:
-                print("Ripping to Ogg Vorbis...")
-                do_batch_rip()
-                print("Re-encoding complete.")
-                target_dir = input("\nName of directory to which the files will be moved: ")
+            if not check_dir_exists(music_root+target_dir):
+                os.mkdir(music_root+target_dir)
 
-                if not check_dir_exists(music_root+target_dir):
-                    os.mkdir(music_root+target_dir)
+            full_name = music_root+target_dir
+            # Set new directory name 
+            name = target_dir
+            os.chdir(full_name)
+            to_copy = glob.glob(os.path.join(tmp_dir, '*.ogg'))
 
-                full_name = music_root+target_dir
-                name = target_dir
-                to_copy = glob.glob(os.path.join(tmp_dir, '*.ogg'))
-
-                print(f"Moving files into album directory {name}...")
-                for ogg in to_copy:
-                    shutil.copy(ogg, full_name)
-                    print(ogg)
-                # Clear tmp/ 
-                shutil.rmtree(tmp_dir)
-                input("\nDone. ENTER to contiue.")
+            print(f"Moving files into album directory {name}...")
+            for ogg in to_copy:
+                shutil.copy(ogg, full_name)
+                print(ogg)
+            # Clear tmp/ 
+            shutil.rmtree(tmp_dir)
+            print("[bold green]\nDone. ENTER to contiue.[/bold green]")
+            input()
 
         elif action == '7':
             # Download file 
@@ -494,7 +515,8 @@ def main():
                 print("Downloading...")
                 get_album_cover(full_path, fname, url)
                 print(f"Saved file as {fname}.")
-                input("ENTER to continue.")
+                print("[bold green]ENTER to continue.[/bold green]")
+                input()
 
         elif action == '8':
             # Change directory 
@@ -504,9 +526,9 @@ def main():
             if not name:
                 full_name = music_root
             elif not check_dir_exists(music_root+name):
-                print(f"Directory {name} does not exist. Check the name.")
-                input("ENTER to continue")
-                #full_name = music_root
+                print(f"[bold red]Directory {name} does not exist. Check the name.[/bold red]")
+                print("[bold green]ENTER to continue[/bold green]")
+                input()
                 name = ''
             else:
                 full_name = music_root+name
@@ -515,13 +537,15 @@ def main():
             # Scrub all dir names 
             scrub_dirs(music_root)
             print(f"All directory names have been scrubbed in {music_root}.")
-            input("ENTER to continue")
+            print("[bold green]ENTER to continue[/bold green]")
+            input()
 
         elif action == '10':
             # Scrub file names in dir 
             scrub_filenames(full_name)
             print(f"All filenames in {name} have been scrubbed.")
-            input("ENTER to continue")
+            print("[bold green]ENTER to continue[/bold green]")
+            input()
 
         elif action == '11':
             # Build histogram 
@@ -531,7 +555,8 @@ def main():
             build_histogram(all_dates)
 
             print("Histogram finished.")
-            input("ENTER to continue")
+            print("[bold green]ENTER to continue[/bold green]")
+            input()
 
         elif action.lower() == 'sh':
             open_shell()
