@@ -31,7 +31,7 @@ from mutagen.easyid3 import EasyID3
 
 
 ## Set the global values 
-__version__ = 'v0.1.0'
+version = '0.1.1'
 # Set 'music_root' to your music collection directory. 
 music_root = "/Music/"
 os.chdir(music_root)
@@ -42,12 +42,15 @@ FFMPEG = '/usr/bin/ffmpeg'
 # Set bit-rate and encoding 
 BITRATE = '192' # Default for Ogg Vorbis 
 CODEC = 'vorbis' # or 'mp3' 
-
 disallowed_chars = re.compile(r"[^\w\s.-]")
 
 
-# Function for readline to handle filename completion 
+
+## Helper Functions 
 def completer(text, state):
+    """
+    Function for readline to handle filename completion 
+    """
     # Expand user home (~) and environment variables
     text = os.path.expanduser(os.path.expandvars(text))
     # Append '*' to match files/directories starting with 'text'
@@ -60,13 +63,7 @@ def completer(text, state):
         return None
 # End completer() 
 
-# Register completer function
-readline.set_completer(completer)
-# Use the tab key for completion
-readline.parse_and_bind('tab: complete')
 
-
-## Helper Functions 
 def get_files_in_dir(directory: str) -> list:
     """
     Returns a list of filenames in {directory}
@@ -372,12 +369,12 @@ def main():
 
     os.system('clear')
     print("Welcome to Album Tools!\n")
-    print("Enter album directory name, or hit 'ENTER' for /Music/")
+    print("Enter album directory name, or hit 'ENTER' for Music/")
     name = input("Directory: ")
     full_name = music_root+name
 
     if not check_dir_exists(full_name):
-        print(name+" does not exist. Using /Music/")
+        print(name+" does not exist. Using Music/")
         name = ''
         full_name = music_root
 
@@ -400,7 +397,7 @@ def main():
         print("[bold cyan]sh[/bold cyan] = Open shell") 
         print(" [bold cyan]q[/bold cyan] = Quit\n")
 
-        action = input("/Music/"+name+"> ")
+        action = input("Music/"+name+"> ")
 
         if action == '1':
             # List files in dir 
@@ -433,9 +430,9 @@ def main():
             new = input("Enter new date (YYYY): ")
             print(f"You have chosen to change this album's date to {new}")
             print("[bold green]Continue? [y/N][/bold green]")
-            ans = input()
-            if ans.lower() == 'y':
-                print(f"Changing dates in /Music/{name}")
+            ans = input('[y/N]')
+            if ans.lower() in ('y', 'yes'):
+                print(f"Changing dates in Music/{name}")
                 set_all_dates(full_name, new)
                 all_dates = get_all_dates(full_name)
                 print(f"All dates in {name} changed to {new}.")
@@ -454,13 +451,13 @@ def main():
 
         elif action == '5':
             # Make new dir 
-            print("Create a new directory under /Music/")
+            print("Create a new directory under Music/")
             dirname = input("New directory name: ")
             fulldir = f"{music_root}/{dirname}"
-            print("[bold green]Create? [y/N] [/bold green]")
-            ans = input()
+            print("[bold green]Create?[/bold green]")
+            ans = input('[y/N]')
 
-            if ans.lower() == 'y':
+            if ans.lower() in ('y', 'yes'):
                 os.mkdir(fulldir)
                 print("[bold green]\nCreated {fulldir}, ENTER to continue[/bold green]")
                 input()
@@ -469,13 +466,13 @@ def main():
             # Download album or track 
             url = input("Album URL: ")
             print(f"Download album to {music_root}tmp/?")
-            ans = input("[y/N] ")
+            ans = input("[y/N]")
 
-            if ans.lower() == 'y':
+            if ans.lower() in ('y', 'yes'):
                 if not check_dir_exists(f"{music_root}tmp/"):
                     os.mkdir(f"{music_root}tmp/")
                 os.chdir(tmp_dir)
-                print("Downloading...")
+                print("[bold green]Downloading...[/bold green]")
                 do_yt_dlp(url)
                 print("[bold green]\nAlbum download complete[/bold green]")
                 input()
@@ -511,7 +508,7 @@ def main():
             print(f"Download file to {full_path}/{fname}?")
             ans = input("[y/N] ")
 
-            if ans.lower() == 'y':
+            if ans.lower() in ('y', 'yes'):
                 print("Downloading...")
                 get_album_cover(full_path, fname, url)
                 print(f"Saved file as {fname}.")
