@@ -2,10 +2,12 @@
 # album-tools 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
-
+#
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
+__version__ = '0.1.3'
+__author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
 import os
@@ -26,7 +28,6 @@ from mutagen.easyid3 import EasyID3
 
 
 ## Set the global values 
-version = '0.1.2'
 # Set 'music_root' to your music collection directory. 
 music_root = "/Music/"
 os.chdir(music_root)
