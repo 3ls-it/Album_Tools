@@ -56,7 +56,7 @@
   ```  
   Then just run:
   ```bash
-  album-tools
+  ./album-tools
   ```  
 
   If needed, be sure to adust the path to `env` in the shebang statement; the first line of `album-tools`:
