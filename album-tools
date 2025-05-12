@@ -21,10 +21,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import yt_dlp
 from mutagen.oggvorbis import OggVorbis
-from mutagen.mp3 import MP3
-from mutagen.id3 import ID3, ID3NoHeaderError, TRCK
 from mutagen.easyid3 import EasyID3
-from mutagen.id3 import ID3, ID3NoHeaderError
 
 
 
@@ -173,11 +170,12 @@ def set_all_common(directory: str):
     print(f"Album Artist: {albumartist}")
     print(f"Date: {date}")
     print(f"Genre: {genre}")
-    ans = input("\n[y/N]")
+    print("[[green]Y[/green]/n]")
+    ans = input()
 
-    if ans.lower() == 'n':
+    if ans.lower() in ('n', 'no'):
         return
-    elif ans.lower() == 'y':
+    else:
         for file in files:
             _, ext = os.path.splitext(file)
             ext = ext.lower()
@@ -200,8 +198,6 @@ def set_all_common(directory: str):
                     print("")
                 except Exception as e:
                     print(f"[red]Error processing {file}:[/red] {e}")
-    else:
-        return
 # End set_all_common() 
 
 
@@ -457,19 +453,17 @@ def main():
                 continue
             new = input("Enter new date (YYYY): ")
             print(f"You have chosen to change this album's date to {new}")
-            print("[bold]Continue?[/bold]")
-            ans = input('[y/[red]N[/red]]')
-            if ans.lower() in ('y', 'yes'):
+            print("[bold]Continue?[/bold] [[green]Y[/green]/n]")
+            ans = input()
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
                 print(f"Changing dates in Music/{name}")
                 set_all_dates(full_name, new)
                 all_dates = get_all_dates(full_name)
                 print(f"All dates in {name} changed to {new}.")
                 print("[bold green]\nENTER to continue[/bold green]")
                 input()
-            else:
-                print("[bold red]\nAborting. ENTER to continue.[/bold red]")
-                input()
-                continue
 
         elif action == '4':
             # Set common tags 
@@ -483,9 +477,12 @@ def main():
             dirname = input("New directory name: ")
             fulldir = f"{music_root}/{dirname}"
             print("[bold green]Create?[/bold green]")
-            ans = input('[y/[red]N[/red]]')
+            print('[[green]Y[/green]/n]')
+            ans = input()
 
-            if ans.lower() in ('y', 'yes'):
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
                 os.mkdir(fulldir)
                 print("[bold green]\nCreated {fulldir}, ENTER to continue[/bold green]")
                 input()
@@ -546,9 +543,12 @@ def main():
             url = input("File URL: ")
             fname = input("Name for file: ")
             print(f"Download file to {full_path}/{fname}?")
-            ans = input("[y/[red]N[/red]] ")
+            print("[[green]Y[/green]/n] ")
+            ans = input()
 
-            if ans.lower() in ('y', 'yes'):
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
                 print("Downloading...")
                 get_album_cover(full_path, fname, url)
                 print(f"Saved file as {fname}.")
