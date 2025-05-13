@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 # album-tools 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
@@ -6,7 +6,7 @@
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
-__version__ = '0.1.3'
+__version__ = '0.1.4'
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -61,6 +61,8 @@ def completer(text, state):
 
 # Register completer function
 readline.set_completer(completer)
+# Use the tab key for completion
+readline.parse_and_bind('tab: complete')
 
 
 def get_files_in_dir(directory: str) -> list:
@@ -364,11 +366,12 @@ def scrub_filenames(a_dir: str):
 # End scrub_filenames() 
 
 
-def open_shell():
+def open_shell(cwd):
     """
     Open an interactive shell in cwd.
     """
 
+    os.chdir(cwd)
     # Launch an interactive shell in the current working directory
     cmd = [SHELL, '-i']
     try:
@@ -389,11 +392,9 @@ def open_shell():
 
 ## main 
 def main():
-    # Use the tab key for completion
-    readline.parse_and_bind('tab: complete')
 
     os.system('clear')
-    print(f"[bold #f5d676]Welcome to Album Tools v{version}![/bold #f5d676]\n")
+    print(f"[bold #f5d676]Welcome to Album Tools v{__version__}![/bold #f5d676]\n")
     print("Enter album directory name, or hit 'ENTER' for Music/")
     name = input("Directory: ")
     full_name = music_root+name
@@ -406,21 +407,21 @@ def main():
     # Menu loop 
     while True:
         os.system('clear')
-        print(f"[bold #f5d676]Album Tools v{version}[/bold #f5d676]")
+        print(f"[bold #f5d676]Album Tools v{__version__}[/bold #f5d676]\n")
         print("Choose:")
-        print(f" 1 = List files in '{name}' directory")
-        print(f" 2 = Get dates for all tracks in '{name}' directory")
-        print(f" 3 = Set date on all tracks in '{name}' directory")
-        print(" 4 = Set common tags for current album")
-        print(" 5 = Create new directory in /Music/")
-        print(" 6 = Download album or track")
-        print(" 7 = Download album cover or other file")
-        print(" 8 = Change directory in /Music/")
-        print(" 9 = Scrub all directory names in /Music/")
-        print(f"10 = Scrub all filenames in '{name}' directory")
-        print("11 = Generate date histogram for collection")
-        print("[bold cyan]sh[/bold cyan] = Open shell") 
-        print(" [bold cyan]q[/bold cyan] = Quit\n")
+        print(f" [bold #f5d676]1[/bold #f5d676] = List files in '{name}' directory")
+        print(f" [bold #f5d676]2[/bold #f5d676] = Get dates for all tracks in '{name}' directory")
+        print(f" [bold #f5d676]3[/bold #f5d676] = Set date on all tracks in '{name}' directory")
+        print(" [bold #f5d676]4[/bold #f5d676] = Set common tags for current album")
+        print(" [bold #f5d676]5[/bold #f5d676] = Create new directory in /Music/")
+        print(" [bold #f5d676]6[/bold #f5d676] = Download album or track")
+        print(" [bold #f5d676]7[/bold #f5d676] = Download album cover or other file")
+        print(" [bold #f5d676]8[/bold #f5d676] = Change directory in /Music/")
+        print(" [bold #f5d676]9[/bold #f5d676] = Scrub all directory names in /Music/")
+        print(f"[bold #f5d676]10[/bold #f5d676] = Scrub all filenames in '{name}' directory")
+        print("[bold #f5d676]11[/bold #f5d676] = Generate date histogram for collection")
+        print("[bold #f5d676]sh[/bold #f5d676] = Open shell") 
+        print(" [bold #f5d676]q[/bold #f5d676] = Quit\n")
 
         action = input("Music/"+name+"> ")
 
@@ -502,9 +503,9 @@ def main():
                 print("[bold green]Downloading...[/bold green]")
                 do_yt_dlp(url)
                 # Set tracknumber in ID3 metadata
-                print("[bold green]Seting track number ID3 tags...[/bold green]")
+                print("[bold #f5d676]Seting track number ID3 tags[/bold #f5d676]")
                 set_tracknum(tmp_dir)
-                print("[bold green]\nAlbum download complete[/bold green]")
+                print("[bold green]\nAlbum download complete. ENTER to continue[/bold green]")
                 input()
             else:
                 continue
@@ -596,7 +597,7 @@ def main():
             input()
 
         elif action.lower() == 'sh':
-            open_shell()
+            open_shell(full_name)
 
         elif action.lower() == 'q':
             print('Bye!')
