@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python3 
+#!/usr/bin/env python3 
 # album-tools 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
@@ -6,7 +6,7 @@
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
-__version__ = '0.1.5'
+__version__ = '0.1.6'
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -22,23 +22,28 @@ import requests
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import yt_dlp
+from yt_dlp.utils import DownloadError
 from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
 
 
 
-## Set the global values 
-# Set 'music_root' to your music collection directory. 
-music_root = "/data/data/com.termux/files/home/SD/Music/"
+### ---------------- User settings  
+# Set 'music_root' to your music collection top-level directory. 
+music_root = "/Music/"
+# Set paths to your shell and `ffmpeg` 
+SHELL = '/usr/bin/bash'
+FFMPEG = '/usr/bin/ffmpeg'
+# Set prefered bit-rate and encoding 
+BITRATE = '192' # 128, 192, 256. ... 
+CODEC = 'vorbis' # 'vorbis' or 'mp3' 
+### ----------------
+
+## Some needed global settings 
 music = os.path.basename(os.path.normpath(music_root))
 os.chdir(music_root)
 tmp_dir = f"{music_root}tmp/"
-# Set paths 
-SHELL = '/data/data/com.termux/files/usr/bin/bash'
-FFMPEG = '/data/data/com.termux/files/usr/bin/ffmpeg'
-# Set bit-rate and encoding 
-BITRATE = '192' # 128, 192, 256. ... 
-CODEC = 'vorbis' # 'vorbis' or 'mp3' 
+# To be striped from filenames  !"#$%&'()*+,/:;<=>?@[\]^`{|}~ 
 disallowed_chars = re.compile(r"[^\w\s.-]")
 
 
@@ -107,6 +112,8 @@ def get_all_dates(directory: str) -> dict:
     for file in files:
         _, ext = os.path.splitext(file)
         ext = ext.lower()
+        f = os.path.basename(file)
+
         if ext in ('.ogg', '.mp3'):
             try:
                 if ext == '.ogg':
@@ -117,11 +124,11 @@ def get_all_dates(directory: str) -> dict:
                     try:
                         dates[file] = int(meta['date'][0])
                     except ValueError:
-                        print(f"[yellow]Warning: Non-numeric date in {file}: {meta['date'][0]} — skipping file.[/yellow]")
+                        print(f"[yellow]Warning: Non-numeric date in {f}: {meta['date'][0]} — skipping file.[/yellow]")
                 else:
-                    print(f"[yellow]Warning: No date found in {file}, skipping.[/yellow]")
+                    print(f"[yellow]Warning: No date found in {f}, skipping.[/yellow]")
             except Exception as e:
-                print(f"[bold red]Error. Unable to read Date field in\n{file} [/bold red]")
+                print(f"[bold red]Error. Unable to read Date field in\n{f} [/bold red]")
                 input(f"{e}")
                 continue
 
@@ -138,6 +145,7 @@ def set_all_dates(directory: str, newdate: str):
     for file in files:
         _, ext = os.path.splitext(file)
         ext = ext.lower()
+        f = os.path.basename(file)
 
         if ext in ('.ogg', '.mp3'):
             try:
@@ -149,11 +157,11 @@ def set_all_dates(directory: str, newdate: str):
                 meta['date'] = [newdate]
                 meta.save()
                 print("Re-wrote:")
-                print(f"[cyan]{file}[/cyan]")
+                print(f"[#f5d676]{f}[/#f5d676]")
                 print("")
 
             except Exception as e:
-                print(f"[red]Error processing {file}:[/red] {e}")
+                print(f"[red]Error processing {f}:[/red] {e}")
 # End set_all_dates() 
 
 
@@ -189,6 +197,7 @@ def set_all_common(directory: str):
         for file in files:
             _, ext = os.path.splitext(file)
             ext = ext.lower()
+            f = os.path.basename(file)
 
             if ext in ('.ogg', '.mp3'):
                 try:
@@ -204,10 +213,10 @@ def set_all_common(directory: str):
                     meta['genre'] = [genre]
                     meta.save()
                     print("Re-wrote:")
-                    print(file)
+                    print(f"[#f5d676]{f}[/#f5d676]")
                     print("")
                 except Exception as e:
-                    print(f"[red]Error processing {file}:[/red] {e}")
+                    print(f"[red]Error processing {f}:[/red] {e}")
 # End set_all_common() 
 
 
@@ -245,6 +254,7 @@ def do_yt_dlp(url: str, output_template: str = "%(playlist_index)02d %(title)s.%
         "format": "bestaudio/best",
         "outtmpl": output_template,
         "writethumbnail": True,
+        "ignore-errors": True,
         **({"ffmpeg_location": ffmpeg_location} if ffmpeg_location else {}),
         "postprocessors": [
             {
@@ -260,8 +270,17 @@ def do_yt_dlp(url: str, output_template: str = "%(playlist_index)02d %(title)s.%
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info: dict = ydl.extract_info(url, download=True)
-    return info
+        try:
+            info: dict = ydl.extract_info(url, download=True)
+        except DownloadError as e:
+            print(f"[red]yt_dlp failed to process most or all of the playlist or track for URL:\n{url}[/red]\nReason: {e}")
+            return None
+
+        # Filter out None entries if this is a playlist
+        if info and 'entries' in info and isinstance(info['entries'], list):
+            info['entries'] = [e for e in info['entries'] if e]
+        return info
+    # End with 
 # End do_yt_dlp() 
 
 
@@ -349,26 +368,28 @@ def scrub_dirs(root_dir: str):
 
 def scrub_filenames(a_dir: str):
     """
-    Removes ilegal characters from filenames
+    Removes illegal characters from filenames
     """
     for path, dirs, files in os.walk(a_dir):
         for file in files:
-            # Let's replace ( and ) 
+            # Let's replace '(' and ')'  with  a  '-'   
             o_name = file.replace('(','-').replace(')','-')
             # Scrub 
             clean_name = disallowed_chars.sub('', o_name) 
-            # replace spaces 
+            # replace spaces  with '_' 
             suggested_new_name = clean_name.replace(' ', '_')
             
             if suggested_new_name != file:
                 old_name = os.path.join(path, file)
+                old_short = os.path.basename(old_name)
                 new_name = os.path.join(path, suggested_new_name)
+                new_short = os.path.basename(new_name)
 
                 try:
                     os.rename(old_name, new_name)
-                    print(f"[green]Renamed:[/green] [cyan]{old_name} → {new_name}[/cyan]")
+                    print(f"[green]Renamed:[/green] [#f5d676]{old_short} → {new_short}[/#f5d676]")
                 except Exception as e:
-                    print(f"[red]Error renaming {old_name}[/red]: {e}")
+                    print(f"[red]Error renaming {old_short}[/red]: {e}")
 # End scrub_filenames() 
 
 
@@ -437,18 +458,19 @@ def main():
             ls = get_files_in_dir(full_name)
             print("")
             print(f"[bold blue]{len(ls)} files in {name}:[/bold blue]")
-            for f in ls:
-                fname = os.path.basename(f)
-                print(f"[#f5d676]{fname}[/#f5d676]")
+            for file in ls:
+                f = os.path.basename(file)
+                print(f"[#f5d676]{f}[/#f5d676]")
             print("[bold green]\nENTER to continue[/bold green]")
             input()
 
         elif action == '2':
             # List dates for all tracsk in dir 
             all_dates = get_all_dates(full_name)
-            print(f"[bold blue]\nDates in /Music/{name}[/bold blue]")
-            for f, d in all_dates.items():
-                print(f"[bold white]{d}: [/bold white] [#f5d676]{f}[/#f5d676]")
+            print(f"[bold blue]\nDates in {music}/{name}[/bold blue]")
+            for file, date in all_dates.items():
+                f = os.path.basename(file)
+                print(f"[bold white]{date}: [/bold white] [#f5d676]{f}[/#f5d676]")
             print("[bold green]\nENTER to continue[/bold green]")
             input()
 
@@ -466,7 +488,7 @@ def main():
             if ans.lower() in ('n', 'no'):
                 continue
             else:
-                print(f"Changing dates in Music/{name}")
+                print(f"Changing dates in {music}/{name}")
                 set_all_dates(full_name, new)
                 all_dates = get_all_dates(full_name)
                 print(f"All dates in {name} changed to {new}.")
@@ -539,9 +561,10 @@ def main():
                 to_copy = glob.glob(os.path.join(tmp_dir, '*'))
 
                 print(f"Moving files into album directory [cyan]{name}[/cyan]...")
-                for f in to_copy:
-                    shutil.copy(f, full_name)
-                    print(f"[cyan]{f}[/cyan]")
+                for file in to_copy:
+                    shutil.copy(file, full_name)
+                    f = os.path.basename(file)
+                    print(f"[#f5d676]{f}[/#f5d676]")
                 # Clear tmp/
                 shutil.rmtree(tmp_dir)
                 print("[bold green]\nDone. ENTER to continue.[/bold green]")
@@ -552,7 +575,7 @@ def main():
             full_path = music_root+name
             url = input("File URL: ")
             fname = input("Name for file: ")
-            print(f"Download file to [cyan]{full_path}/{fname}[/cyan]?")
+            print(f"Download file to [#f5d676]{fname}[/#f5d676]?")
             print("[[green]Y[/green]/n] ")
             ans = input()
 
@@ -561,14 +584,15 @@ def main():
             else:
                 print("Downloading...")
                 get_album_cover(full_path, fname, url)
-                print(f"Saved file as {fname}.")
+                print(f"Saved file as [#f5d676]{fname}[/#f5d676].")
                 print("[bold green]ENTER to continue.[/bold green]")
                 input()
 
         elif action == '8':
             # Change directory 
             os.chdir(music_root)
-            name = input("Directory: ")
+            print(f"Enter album directory name, or hit [bold green]'ENTER'[/bold green] for [cyan]{music}[/cyan]")
+            name = input("Directory:")
 
             if not name:
                 full_name = music_root
