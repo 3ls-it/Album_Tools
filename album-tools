@@ -6,7 +6,7 @@
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
-__version__ = '0.1.6'
+__version__ = '0.1.7'
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -31,7 +31,7 @@ from mutagen.easyid3 import EasyID3
 ### ---------------- User settings  
 # Set 'music_root' to your music collection top-level directory. 
 music_root = "/Music/"
-# Set paths to your shell and `ffmpeg` 
+# Set paths to your shell and `ffmpeg`
 SHELL = '/usr/bin/bash'
 FFMPEG = '/usr/bin/ffmpeg'
 # Set prefered bit-rate and encoding 
@@ -513,7 +513,7 @@ def main():
             if ans.lower() in ('n', 'no'):
                 continue
             else:
-                os.mkdir(fulldir)
+                os.makedirs(fulldir, exist_ok=True)
                 print(f"\n[bold green]Created[/bold green] [bold cyan]{fulldir}[/bold cyan], [bold green]ENTER to continue[/bold green]")
                 input()
 
@@ -527,8 +527,7 @@ def main():
             if ans.lower() in ('n', 'no'):
                 continue
             else:
-                if not check_dir_exists(f"{music_root}tmp/"):
-                    os.mkdir(f"{music_root}tmp/")
+                os.makedirs(f"{music_root}tmp/", exist_ok=True)
                 os.chdir(tmp_dir)
                 print("[bold green]Downloading...[/bold green]")
                 do_yt_dlp(url)
@@ -550,10 +549,7 @@ def main():
                 continue
             else:
                 target_dir = input("\nName of directory to which the files will be moved: ")
-
-                if not check_dir_exists(music_root+target_dir):
-                    os.mkdir(music_root+target_dir)
-
+                os.makedirs(music_root+target_dir, exist_ok=True)
                 full_name = music_root+target_dir
                 # Set new directory name 
                 name = target_dir
@@ -592,7 +588,7 @@ def main():
             # Change directory 
             os.chdir(music_root)
             print(f"Enter album directory name, or hit [bold green]'ENTER'[/bold green] for [cyan]{music}[/cyan]")
-            name = input("Directory:")
+            name = input("Directory: ")
 
             if not name:
                 full_name = music_root
