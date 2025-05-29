@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 
+#!/data/data/com.termux/files/usr/bin/env python3 
 # album-tools 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
@@ -6,7 +6,7 @@
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
-__version__ = '0.1.7'
+__version__ = '0.1.8'
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -23,27 +23,30 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import yt_dlp
 from yt_dlp.utils import DownloadError
+from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
 
 
 
-### ---------------- User settings  
-# Set 'music_root' to your music collection top-level directory. 
-music_root = "/Music/"
+### -------- User settings --------###
+# Set 'music_root' to the full path to your music collection directory. 
+# Include trailing slash 
+music_root = "/data/data/com.termux/files/home/SD/Music/"
 # Set paths to your shell and `ffmpeg`
-SHELL = '/usr/bin/bash'
-FFMPEG = '/usr/bin/ffmpeg'
-# Set prefered bit-rate and encoding 
-BITRATE = '192' # 128, 192, 256. ... 
-CODEC = 'vorbis' # 'vorbis' or 'mp3' 
-### ----------------
+SHELL = '/data/data/com.termux/files/usr/bin/bash'
+FFMPEG = '/data/data/com.termux/files/usr/bin/ffmpeg'
+# Set preferred encoding 
+CODEC = 'opus'
+#CODEC = 'vorbis' 
+#CODEC = 'mp3'
+### ---------------- ###
 
 ## Some needed global settings 
 music = os.path.basename(os.path.normpath(music_root))
 os.chdir(music_root)
 tmp_dir = f"{music_root}tmp/"
-# To be striped from filenames  !"#$%&'()*+,/:;<=>?@[\]^`{|}~ 
+# To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~ 
 disallowed_chars = re.compile(r"[^\w\s.-]")
 
 
@@ -114,9 +117,11 @@ def get_all_dates(directory: str) -> dict:
         ext = ext.lower()
         f = os.path.basename(file)
 
-        if ext in ('.ogg', '.mp3'):
+        if ext in ('.opus', '.ogg', '.mp3'):
             try:
-                if ext == '.ogg':
+                if ext == '.opus':
+                    meta = OggOpus(file)
+                elif ext == '.ogg':
                     meta = OggVorbis(file)
                 elif ext == '.mp3':
                     meta = EasyID3(file)
@@ -147,9 +152,11 @@ def set_all_dates(directory: str, newdate: str):
         ext = ext.lower()
         f = os.path.basename(file)
 
-        if ext in ('.ogg', '.mp3'):
+        if ext in ('.opus', '.ogg', '.mp3'):
             try:
-                if ext == '.ogg':
+                if ext == '.opus':
+                    meta = OggOpus(file)
+                elif ext == '.ogg':
                     meta = OggVorbis(file)
                 elif ext == '.mp3':
                     meta = EasyID3(file)
@@ -199,9 +206,11 @@ def set_all_common(directory: str):
             ext = ext.lower()
             f = os.path.basename(file)
 
-            if ext in ('.ogg', '.mp3'):
+            if ext in ('.opus', '.ogg', '.mp3'):
                 try:
-                    if ext == '.ogg':
+                    if ext == '.opus':
+                        meta = OggOpus(file)
+                    elif ext == '.ogg':
                         meta = OggVorbis(file)
                     elif ext == '.mp3':
                         meta = EasyID3(file)
@@ -245,29 +254,65 @@ def get_album_cover(directory: str, file_name: str, url: str):
 
 
 def do_yt_dlp(url: str, output_template: str = "%(playlist_index)02d %(title)s.%(ext)s",
-              quality: str = BITRATE, ffmpeg_location: str = FFMPEG) -> dict:
+              ffmpeg_location: str = FFMPEG) -> dict:
     """
-    Download an album or track with yt-dlp
+    Download an album or track with yt-dlp and encode audio as
+    Ogg Opus, Ogg Vorbis, or MP3 with variable bitrate.
     """
 
+    postprocessors = []
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_template,
         "writethumbnail": True,
         "ignore-errors": True,
         **({"ffmpeg_location": ffmpeg_location} if ffmpeg_location else {}),
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": CODEC,
-                "preferredquality": quality,
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-        ],
-        "retries": 10
+        "retries": 10,
     }
+
+    # Codec/Quality logic 
+    # Always start clean: remove postprocessor_args if present. 
+    ydl_opts.pop("postprocessor_args", None)
+    codec = CODEC.lower().strip()
+
+    if codec == "opus":
+        # Opus: '-c:a libopus -b:a 192k '  
+        qual = '192k'
+        postprocessors.append({
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "opus",
+            "preferredquality": qual
+        })
+        ydl_opts["postprocessor_args"] = ["-c:a", "libopus",
+                                          "-b:a", qual]
+
+    elif codec == "vorbis":
+        # Vorbis VBR quality (0–10), default 6 ≈ 192 kbps VBR  
+        qual = '6'
+        postprocessors.append({
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "vorbis",
+            "preferredquality": qual
+        })
+        ydl_opts["postprocessor_args"] = ["-c:a", "libvorbis"]
+
+    elif codec == "mp3":
+        # MP3: -q:a N VBR flag, 0 is best quality VBR (LAME V0). Default '0'   
+        qual = '0'
+        postprocessors.append({
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": qual
+        })
+        ydl_opts["postprocessor_args"] = ["-c:a", "libmp3lame",
+                                          "-q:a", qual]
+
+    else:
+        print(f"[red]Warning: CODEC '{CODEC}' is not supported. Please set CODEC to 'opus, 'vorbis' or 'mp3' in the 'User settings' section.[/red]")
+        return None
+
+    postprocessors.append({"key": "FFmpegMetadata"})
+    ydl_opts["postprocessors"] = postprocessors
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
@@ -316,20 +361,98 @@ def set_tracknum(directory: str):
 # End set_tracknum() 
 
 
+def audit_date_tags(directory: str, outpath: str = None):
+    """
+    Scans music files in the directory for missing or malformed date tags and writes a log file.
+    """
+    files = get_files_in_dir(directory)
+    log_entries = []
+    valid_dates = 0
+    for file in files:
+        _, ext = os.path.splitext(file)
+        ext = ext.lower()
+        f = os.path.relpath(file, directory)
+        if ext in ('.ogg', '.mp3'):
+            try:
+                if ext == '.ogg':
+                    meta = OggVorbis(file)
+                elif ext == '.mp3':
+                    meta = EasyID3(file)
+                if 'date' in meta and meta['date'] and meta['date'][0].strip():
+                    try:
+                        year = int(meta['date'][0])
+                        if 1900 <= year <= 2100:
+                            valid_dates += 1
+                        else:
+                            entry = f"Improbable year '{meta['date'][0]}' in: {f}"
+                            log_entries.append(entry)
+                    except ValueError:
+                        entry = f"Non-numeric date '{meta['date'][0]}' in: {f}"
+                        log_entries.append(entry)
+                else:
+                    entry = f"Missing date tag in: {f}"
+                    log_entries.append(entry)
+            except Exception as e:
+                entry = f"[Error reading file: {f}] Reason: {e}"
+                log_entries.append(entry)
+
+    summary = [f"Total valid date tags: {valid_dates}",
+               f"Total files with missing/malformed dates: {len(log_entries)}"]
+
+    log_body = summary + ["", "Problematic files:"] + log_entries
+    log_text = "\n".join(log_body)
+
+    if not outpath:
+        stamp = datetime.now().replace(microsecond=0).isoformat().replace('-','').replace(':','')
+        outpath = os.path.join(directory, f"date_tag_audit_{stamp}.log")
+
+    try:
+        with open(outpath, "w") as f:
+            f.write(log_text)
+        print(f"[green]Date tag audit written to:[/green] [bold]{outpath}[/bold]")
+        print(f"[cyan]({valid_dates} valid dates, {len(log_entries)} issues found)[/cyan]")
+    except Exception as e:
+        print(f"[bold red]Failed to write audit log:[/bold red] {e}")
+
+
 def build_histogram(dates: list):
     """
-    Writes a .png histogram for all unique dates in /Music/
+    Writes a .png histogram for all unique dates (years) in /Music/
+    Handles empty or corrupted input gracefully, and provides file output info.
     """
-    unique = get_unique_dates(dates)
-    #N_points = unique//2
-    n_bins = unique
+    # Ensure we have a list with integer years only
+    clean_dates = []
+    for d in dates:
+        try:
+            year = int(d)
+            # Optionally filter for (reasonable) year range, e.g. 1900-2100
+            if 1900 <= year <= 2100:
+                clean_dates.append(year)
+            else:
+                print(f"[yellow]Warning: Ignoring improbable year: {d}")
+        except Exception:
+            print(f"[yellow]Warning: Ignoring invalid date value: {d}")
 
-    fig, axs = plt.subplots(figsize=(5, 5), layout='constrained')
-    axs.hist(dates, bins=n_bins)
-    axs.set_xlabel("Album Years")
-    #plt.show()
-    stamp = datetime.now().replace(microsecond=0).isoformat().replace('-','').replace(':','')
-    plt.savefig(music_root+'music_collection_dates-'+stamp+'.png')
+    if not clean_dates:
+        print("[bold red]No valid date tags found! Cannot generate histogram.[/bold red]")
+        return
+
+    unique = len(set(clean_dates))
+    n_bins = max(1, unique)
+
+    try:
+        fig, axs = plt.subplots(figsize=(6, 5), layout='constrained')
+        axs.hist(clean_dates, bins=n_bins, color="#f5d676", edgecolor="#681c2c")
+        axs.set_xlabel("Album Year")
+        axs.set_ylabel("Count of Tracks/Files")
+        axs.set_title("Histogram of Track Dates in Collection")
+        stamp = datetime.now().replace(microsecond=0).isoformat().replace('-','').replace(':','')
+        outpath = music_root + 'music_collection_dates-' + stamp + '.png'
+        plt.savefig(outpath)
+        print(f"[green]Histogram saved to:[/green] [bold]{outpath}[/bold]")
+        plt.close(fig)
+    except Exception as e:
+        print(f"[bold red]Error during histogram generation or saving:[/bold red] {e}")
 # End build_histogram() 
 
 
@@ -446,7 +569,8 @@ def main():
         print(f" [bold #f5d676]8[/bold #f5d676] = Change directory in [cyan]{music}/[/cyan]")
         print(f" [bold #f5d676]9[/bold #f5d676] = Scrub all directory names in [cyan]{music}/[/cyan]")
         print(f"[bold #f5d676]10[/bold #f5d676] = Scrub all filenames in [cyan]{name}[/cyan] directory")
-        #print("[bold #f5d676]11[/bold #f5d676] = Generate date histogram for collection")
+        print("[bold #f5d676]11[/bold #f5d676] = Generate date histogram for collection")
+        print(f"[bold #f5d676]12[/bold #f5d676] = Audit/missing date tags in [cyan]{music}[/cyan] collection")
         print("[bold #f5d676]sh[/bold #f5d676] = Open shell") 
         print(" [bold #f5d676]q[/bold #f5d676] = Quit\n")
 
@@ -518,9 +642,9 @@ def main():
                 input()
 
         elif action == '6':
-            # Download album or track
+            # Download album or track 
             url = input("Album URL: ")
-            print(f"Download album to [cyan]{music}/tmp/[/cyan]?")
+            print(f"Download album/track? (Will be staged in [cyan]{music}/tmp/[/cyan])")
             print("[[bold green]Y[/bold green]/n]")
             ans = input('')
 
@@ -534,7 +658,7 @@ def main():
                 # Set tracknumber in ID3 metadata
                 print("\n[bold #f5d676]Setting track number ID3 tags[/bold #f5d676]")
                 set_tracknum(tmp_dir)
-                print("[bold green]\nAlbum download complete. ENTER to continue[/bold green]")
+                print("[bold green]\nDownload complete. ENTER to continue[/bold green]")
                 input()
 
             # Move dloaded files into album directory
@@ -545,7 +669,10 @@ def main():
             move_files = input()
 
             if move_files.lower() in ("no", "n"):
-                print(f"[bold cyan]Leaving downloaded files in {tmp_dir}[/bold cyan]")
+                print(f"\nLeaving downloaded files in [cyan]{tmp_dir}[/cyan]")
+                print("[yellow]You will want to move them before downloading again.[/yellow]")
+                print("[bold green]ENTER to continue[/bold green]")
+                input()
                 continue
             else:
                 target_dir = input("\nName of directory to which the files will be moved: ")
@@ -617,12 +744,18 @@ def main():
         elif action == '11':
             # Build histogram 
             print(f"Building date histogram for [cyan]{music}[/cyan]")
-
+            os.chdir(music_root)
             all_dates = get_all_dates(music_root)
             build_histogram(list(all_dates.values()))
-
             print("Histogram finished.")
             print("[bold green]ENTER to continue[/bold green]")
+            input()
+
+        elif action == '12':
+            # Audit date tags and write log
+            print(f"Auditing date tags in [cyan]{music}[/cyan] collection...")
+            audit_date_tags(music_root)
+            print("[bold green]\nENTER to continue[/bold green]")
             input()
 
         elif action.lower() == 'sh':
