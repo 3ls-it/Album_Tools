@@ -6,7 +6,7 @@
 # Colours: 
 # pale yellow #f5d676 
 # dark burnt red #681c2c 
-__version__ = '0.1.8'
+__version__ = '0.1.9'
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -32,14 +32,14 @@ from mutagen.easyid3 import EasyID3
 ### -------- User settings --------###
 # Set 'music_root' to the full path to your music collection directory. 
 # Include trailing slash 
-music_root = "/Music/"
+music_root = '' 
 # Set paths to your shell and `ffmpeg`
 SHELL = '/usr/bin/bash'
 FFMPEG = '/usr/bin/ffmpeg'
 # Set preferred supported encoding 
-CODEC = 'opus' # For Ogg Opus 
-#CODEC = 'vorbis'  # For Ogg Vorbis 
-#CODEC = 'mp3' # For MP3 
+CODEC = 'opus'
+#CODEC = 'vorbis' 
+#CODEC = 'mp3'
 ### ---------------- ### 
 
 ## Some needed global settings 
@@ -351,6 +351,9 @@ def set_tracknum(directory: str):
 
             except Exception as e:
                 print(f"[red]Error processing {file}:[/red] {e}")
+        elif not match:
+            print(f"[yellow]{file} does not seem to start with two digits.[/yellow]")
+            input()
 # End set_tracknum() 
 
 

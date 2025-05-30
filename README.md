@@ -2,13 +2,13 @@
 
 ### About  
 
-  `album-tools` is terminal based tool for managing your music collection, and downloading and/or creating music albums. It has been designed to meet my own needs. Your mileage may vary as your own needs and work flow are different than mine. If it's useful to you, Great!  
+  `album-tools` is terminal based tool for managing your music collection, and downloading and/or creating music albums. It has been designed to meet my own needs. Your mileage may vary as your own needs and work flow are different than mine. If it's useful to you, Great! If you like it, and have suggestions/changes, let me know.  
 
   This started as a way for me to create a histogram of all the album dates in my collection, and grew into something else. (As often happens!)  
   
   It was built and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. As such, any site|service that `yt-dlp` supports, is supported by `album-tools`. As such, it is important to keep `yt-dlp` (and the other dependencies) up to date.  
    
-  When downloading an album, the album art is downloaded with the tracks. The files are re-encoded (Ogg Vorbis by default), and the filenames are pre-pended with the track number.  
+  When downloading an album, the album art is downloaded with the tracks. The files are re-encoded (Ogg Opus by default), and the filenames are pre-pended with the track number, and the track number is written to the metadata.  
 
 
 ### Installation
@@ -27,19 +27,20 @@
 3. Configure `album-tools`
    - Before using, you will need to set the correct values for these variables near the top of the `album-tools` script using your favourite text editor:  
    ```python
-   ### ---------------- User settings
+   ### -------- User settings -------- ###
    # Set 'music_root' to the full path to your music collection directory.
-   # Include trailing slash.
-   music_root = "/path/to_your/music_collection/"
+   # Include trailing slash
+   music_root = '/full/path/to/your/music/directory/'
    # Set paths to your shell and `ffmpeg`
    SHELL = '/usr/bin/bash'
    FFMPEG = '/usr/bin/ffmpeg'
-   # Set prefered bit-rate and encoding
-   BITRATE = '192' # 128, 192, 256, ...
-   CODEC = 'vorbis' # 'vorbis' or 'mp3' 
-   ### ----------------
+   # Set preferred supported encoding
+   CODEC = 'opus'
+   #CODEC = 'vorbis'
+   #CODEC = 'mp3'
+   ### ---------------- ###
    ```  
-   - If you are unsure of the path to your shell (`bash`, `zsh`, `tcsh`, etc.) or the location of `ffmpeg`,  you can enter the following commands:  
+   - If you are unsure of the path to your shell (`bash`, `zsh`, `tcsh`, etc.) or the location of `ffmpeg`,  you can enter the following commands to find out:  
 
    ```bash
    env | grep SHELL
@@ -67,7 +68,7 @@
   ```  
   For convenience, you can copy the `album-tools` script to somewhere in your `$PATH`, e.g., `~/bin` or `~/.local/bin/`. What ever make sense in your environment.
 
-  If needed, be sure to adust the path to `env` in the shebang statement; the first line of `album-tools`:
+  If needed, be sure to adust the path to `env` in the shebang statement, i.e., the first line of `album-tools`:
   ```python
   #!/usr/bin/env python3
   ```  
@@ -83,4 +84,13 @@
 - Escape to an interactive shell at any time from within the app for flexibility
 - Tab-completion for filesystem paths while entering commands
 - Coloured output for improved readability
-- Configurable file format (OGG, MP3) and bitrate settings
+- Configurable file format (Opus, Vorbis, MP3) with high-quality variable bitrate output
+
+
+### Recommended Reading  
+  
+Media Players (Open Source, Ad Free):  
+  - VLC (Multi-platform, My personal choice)  
+    https://www.videolan.org/vlc/  
+  - Fossify Music Player (Android)  
+    https://f-droid.org/en/packages/org.fossify.musicplayer/ 
