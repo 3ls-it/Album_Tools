@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python3 
+#!/usr/bin/env python3 
 # album-tools 
 # (c) 2025 J. Adams jfa63[at]duck[dot]com  
 # Released under the Two-clause BSD License    
@@ -32,15 +32,15 @@ from mutagen.easyid3 import EasyID3
 ### -------- User settings --------###
 # Set 'music_root' to the full path to your music collection directory. 
 # Include trailing slash 
-music_root = "/data/data/com.termux/files/home/SD/Music/"
+music_root = "/Music/"
 # Set paths to your shell and `ffmpeg`
-SHELL = '/data/data/com.termux/files/usr/bin/bash'
-FFMPEG = '/data/data/com.termux/files/usr/bin/ffmpeg'
-# Set preferred encoding 
-CODEC = 'opus'
-#CODEC = 'vorbis' 
-#CODEC = 'mp3'
-### ---------------- ###
+SHELL = '/usr/bin/bash'
+FFMPEG = '/usr/bin/ffmpeg'
+# Set preferred supported encoding 
+CODEC = 'opus' # For Ogg Opus 
+#CODEC = 'vorbis'  # For Ogg Vorbis 
+#CODEC = 'mp3' # For MP3 
+### ---------------- ### 
 
 ## Some needed global settings 
 music = os.path.basename(os.path.normpath(music_root))
@@ -68,9 +68,9 @@ def completer(text, state):
         return None
 # End completer() 
 
-# Register completer function
+# Register completer function 
 readline.set_completer(completer)
-# Use the tab key for completion
+# Use the tab key for completion 
 readline.parse_and_bind('tab: complete')
 
 
@@ -94,15 +94,6 @@ def check_dir_exists(directory: str) -> bool:
     """
     return os.path.isdir(directory)
 # End check_dir_exists() 
-
-
-def get_unique_dates(dates: list) -> int:
-    """
-    Returns the number of unique dates for the histogram
-    """
-    unique_dates = set(dates)
-    return len(unique_dates) 
-# End get_unique_dates() 
 
 
 def get_all_dates(directory: str) -> dict:
@@ -297,7 +288,7 @@ def do_yt_dlp(url: str, output_template: str = "%(playlist_index)02d %(title)s.%
         ydl_opts["postprocessor_args"] = ["-c:a", "libvorbis"]
 
     elif codec == "mp3":
-        # MP3: -q:a N VBR flag, 0 is best quality VBR (LAME V0). Default '0'   
+        # MP3: -q:a N VBR-flag, 0 is best quality VBR (LAME V0). Default '0'   
         qual = '0'
         postprocessors.append({
             "key": "FFmpegExtractAudio",
@@ -346,9 +337,11 @@ def set_tracknum(directory: str):
         # Check that first two characters are digits 
         match = re.match(r'^(\d{2})', basename)
         # If so, write tracknumber tag 
-        if match and ext in ('.ogg', '.mp3'):        
+        if match and ext in ('.opus', '.ogg', '.mp3'):        
             try:
-                if ext == '.ogg':
+                if ext == '.opus':
+                    meta = OggOpus(file)
+                elif ext == '.ogg':
                     meta = OggVorbis(file)
                 elif ext == '.mp3':
                     meta = EasyID3(file)
@@ -413,6 +406,7 @@ def audit_date_tags(directory: str, outpath: str = None):
         print(f"[cyan]({valid_dates} valid dates, {len(log_entries)} issues found)[/cyan]")
     except Exception as e:
         print(f"[bold red]Failed to write audit log:[/bold red] {e}")
+# End audit_date_tags() 
 
 
 def build_histogram(dates: list):
