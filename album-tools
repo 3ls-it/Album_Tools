@@ -15,8 +15,9 @@ import re
 import readline
 import shutil
 import subprocess as proc
-# import sys
+import sys
 from datetime import datetime
+
 from rich import print
 from rich.console import Console
 import requests
@@ -29,8 +30,9 @@ from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
 
 
+
 ### -------- User settings --------###
-# Set 'music_root' to the full path to your music collection directory.
+# Set 'music_root' to the full path of your music collection directory.
 # Include trailing slash
 music_root = ""
 # Set paths to your shell and `ffmpeg`
@@ -44,11 +46,18 @@ CODEC = "opus"
 
 ## Some needed global settings
 music = os.path.basename(os.path.normpath(music_root))
-os.chdir(music_root)
+try:
+    os.chdir(music_root)
+except FileNotFoundError:
+    print("[b red]You must specify the full path to your music directory.[/]")
+    print("See the README for instructions.")
+    sys.exit()
+
 tmp_dir = f"{music_root}tmp/"
 # To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~
 disallowed_chars = re.compile(r"[^\w\s.-]")
 c = Console()
+
 
 
 ## Helper Functions
@@ -86,14 +95,6 @@ def get_files_in_dir(directory: str) -> list:
     file_list.sort()
     return file_list
 # End get_files_in_dir()
-
-
-def check_dir_exists(directory: str) -> bool:
-    """
-    Does {directory} exist?
-    """
-    return os.path.isdir(directory)
-# End check_dir_exists()
 
 
 def get_all_dates(directory: str) -> dict:
@@ -224,7 +225,7 @@ def set_all_common(directory: str):
 # End set_all_common()
 
 
-def get_album_cover(directory: str, file_name: str, url: str):
+def do_file_dload(directory: str, file_name: str, url: str):
     """
     Download a file such as an album cover
     """
@@ -386,9 +387,11 @@ def audit_date_tags(directory: str, outpath: str = None):
         _, ext = os.path.splitext(file)
         ext = ext.lower()
         f = os.path.relpath(file, directory)
-        if ext in (".ogg", ".mp3"):
+        if ext in (".opus", ".ogg", ".mp3"):
             try:
-                if ext == ".ogg":
+                if ext == ".opus":
+                    meta = OggOpus(file)
+                elif ext == ".ogg":
                     meta = OggVorbis(file)
                 elif ext == ".mp3":
                     meta = EasyID3(file)
@@ -426,15 +429,16 @@ def audit_date_tags(directory: str, outpath: str = None):
             .replace("-", "")
             .replace(":", "")
         )
-        outpath = os.path.join(directory, f"date_tag_audit_{stamp}.log")
+        log_file = f"date_tag_audit_{stamp}.log"
+        out_path = os.path.join(directory, log_file)
 
     try:
-        with open(outpath, "w") as f:
+        with open(out_path, "w") as f:
             f.write(log_text)
-        print(f"[green]Date tag audit written to:[/] [b]{outpath}[/]")
+        print(f"\n[green]Date tag audit written to:[/] [b cyan]{music}/{log_file}[/]")
         print(f"[cyan]({valid_dates} valid dates, {len(log_entries)} issues found)[/]")
     except Exception as e:
-        print(f"[b red]Failed to write audit log:[/] {e}")
+        print(f"\n[b red]Failed to write audit log:[/] {e}")
 # End audit_date_tags()
 
 
@@ -476,12 +480,13 @@ def build_histogram(dates: list):
             .replace("-", "")
             .replace(":", "")
         )
-        outpath = music_root + "music_collection_dates-" + stamp + ".png"
-        plt.savefig(outpath)
-        print(f"[green]Histogram saved to:[/] [b]{outpath}[/]")
+        out_path = music_root + "/music_collection_dates-" + stamp + ".png"
+        disp_path = music + "/music_collection_dates-" + stamp + ".png"
+        plt.savefig(out_path)
+        print(f"\n[green]Histogram saved to:[/] [b cyan]{disp_path}[/]")
         plt.close(fig)
     except Exception as e:
-        print(f"[b red]Error during histogram generation or saving:[/] {e}")
+        print(f"\n[b red]Error during histogram generation or saving:[/] {e}")
 # End build_histogram()
 
 
@@ -583,7 +588,12 @@ def main():
     full_name = music_root + name
 
     if not name:
-        print(f"[cyan]{name}[/] does not exist. Using [cyan]{music}[/]")
+        full_name = music_root
+        name = music + "/"
+    elif not os.path.isdir(music_root + name):
+        print(f"Directory [cyan]{name}[/] does not exist. Using [cyan]{music}[/]")
+        print("[green]ENTER to continue[/]")
+        input()
         full_name = music_root
         name = music + "/"
 
@@ -591,32 +601,45 @@ def main():
     while True:
         os.system("clear")
 
-        print(f"[b #f5d676 u]Album Tools v{__version__}[/]\n")
+        print(f"[b #f5d676]Album Tools v{__version__}[/]\n")
+        c.rule()
         print("[#f5d676]Current Album Directory:[/]")
         print(f"[cyan]{name}[/]\n")
 
         print(" [b #f5d676]1[/] = [b]List files[/] in current directory")
         print(" [b #f5d676]2[/] = [b]Get dates[/] for all tracks in current directory")
         print(" [b #f5d676]3[/] = [b]Set date[/] on all tracks in current directory")
-        print(" [b #f5d676]4[/] = [b]Set track number[/] on all tracks in current directory")
-        print(" [b #f5d676]5[/] = [b]Set common tags[/] on all tracks in current directory")
+        print(
+            " [b #f5d676]4[/] = [b]Set track number[/] on all tracks in current directory"
+        )
+        print(
+            " [b #f5d676]5[/] = [b]Set common tags[/] on all tracks in current directory"
+        )
         print(f" [b #f5d676]6[/] = [b]Create new directory[/] in [cyan]{music}/[/]")
         print(
             " [b #f5d676]7[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])"
         )
         print(
-            " [b #f5d676]8[/] = [b]Download cover art[/], or other file ([u #ff7f7f]no postprocessing[/])"
+            " [b #f5d676]8[/] = [b]Download file[/], e.g, cover art ([u #ff7f7f]no postprocessing[/])"
         )
         print(f" [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]")
-        print(f"[b #f5d676]10[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]")
+        print(
+            f"[b #f5d676]10[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]"
+        )
         print("[b #f5d676]11[/] = [b]Scrub all filenames[/] in current directory")
-        print(f"[b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection")
-        print(f"[b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection")
+        print(
+            f"[b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection"
+        )
+        print(
+            f"[b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection"
+        )
         print("[b #f5d676]sh[/] = [#90ee90]Open shell[/]")
         print(" [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n")
+        c.rule()
 
         ## Action prompt
         action = input(">> ").strip()
+        os.system("clear")
 
         ## Action choices
         if action == "1":
@@ -637,7 +660,6 @@ def main():
             # List dates for all tracsk in dir
             all_dates = get_all_dates(full_name)
             print(f"[b blue]\nDates in {music}/{name}[/]")
-
             for file, date in all_dates.items():
                 f = os.path.basename(file)
                 print(f"[b white]{date}: [/] [#f5d676]{f}[/]")
@@ -652,8 +674,8 @@ def main():
                 input()
                 continue
 
-            print("Enter new date (YYYY): ")
-            new = input().strip()
+            print("[yellow]Enter new date (YYYY)[/]")
+            new = input(": ").strip()
             print(f"You have chosen to change this album's date to {new}")
             print(f"All tracks in [cyan]{name}[/] will have the date field modified.")
             print("[b]Continue?[/] [[green]Y[/]/n]")
@@ -694,12 +716,12 @@ def main():
 
         elif action == "6":
             # Make new dir
-            print(f"Create a new directory under [cyan]{music}[/]")
+            print(f"[yellow]Create a new directory under[/] [cyan]{music}[/]")
             print("New directory name: ")
             dirname = input().strip()
 
             fulldir = f"{music_root}/{dirname}"
-            print("[b]Create?[/]")
+            print("[b yellow]Create?[/]")
             print("[[green]Y[/]/n]")
             ans = input().strip()
 
@@ -714,8 +736,8 @@ def main():
 
         elif action == "7":
             # Download album or track
-            print("Album/Playlist URL: ")
-            url = input().strip()
+            print("[yellow]Album/Playlist URL[/]")
+            url = input(": ").strip()
             print(
                 f"\n[yellow]Download album/track?[/] (Will be staged in [cyan]{music}/tmp/[/])"
             )
@@ -729,9 +751,10 @@ def main():
                 os.chdir(tmp_dir)
                 print("[b green]Downloading...[/]")
                 do_yt_dlp(url)
+
                 # Set tracknumber in ID3 metadata
-                print("\n[b #f5d676]Setting track number ID3 tags[/]")
-                set_tracknum(tmp_dir)
+                with c.status("\n[b #f5d676]Setting track number ID3 tags[/]"):
+                    set_tracknum(tmp_dir)
                 print("[b green]\nDownload complete. ENTER to continue[/]")
                 input()
 
@@ -751,8 +774,8 @@ def main():
                 input()
                 continue
             else:
-                print("\nName of directory to which the files will be moved: ")
-                target_dir = input().strip()
+                print("\n[yellow]Name of directory to which the files will be moved[/]")
+                target_dir = input(": ").strip()
                 os.makedirs(music_root + target_dir, exist_ok=True)
                 full_name = music_root + target_dir
 
@@ -780,15 +803,15 @@ def main():
             full_path = music_root + name
             url = input("File URL: ").strip()
             fname = input("Name for file: ").strip()
-            print(f"Download file to [#f5d676]{fname}[/]?")
-            print("[[green]Y[/]/n] ")
+            print(f"[yellow]Download file to[/] [#f5d676]{fname}[/]?")
+            print("[[green]Y[/]/n]")
             ans = input().strip()
 
             if ans.lower() in ("n", "no"):
                 continue
             else:
-                print("Downloading...")
-                get_album_cover(full_path, fname, url)
+                print("[green]Downloading...[/]")
+                do_file_dload(full_path, fname, url)
                 print(f"Saved file as [#f5d676]{fname}[/].")
                 print("[b green]ENTER to return to menu.[/]")
                 input()
@@ -797,7 +820,7 @@ def main():
             # Change directory
             os.chdir(music_root)
             print(
-                f"Enter album directory name, or hit [b green]'ENTER'[/] for [cyan]{music}[/]"
+                f"[yellow]Enter album directory name, or hit[/] [b green]'ENTER'[/] [yellow]for[/] [cyan]{music}[/]"
             )
             name = input("Directory: ").strip()
 
@@ -814,7 +837,7 @@ def main():
 
         elif action == "10":
             # Scrub all dir names
-            print(f"\nScrubbing all directory names in [cyan]{music}[/].")
+            print(f"\n[yellow]Scrubbing all directory names in[/] [cyan]{music}[/].")
             scrub_dirs(music_root)
             print(f"\nAll directory names have been scrubbed in [cyan]{music}[/].")
             print("[b green]ENTER to return to menu[/]")
@@ -829,18 +852,17 @@ def main():
 
         elif action == "12":
             # Build histogram
-            print(f"Building date histogram for [cyan]{music}[/]")
-            os.chdir(music_root)
-            all_dates = get_all_dates(music_root)
-            build_histogram(list(all_dates.values()))
-            print("Histogram finished.")
-            print("[b green]ENTER to return to menu[/]")
+            with c.status(f"[yellow]Building date histogram for[/] [cyan]{music}[/]"):
+                os.chdir(music_root)
+                all_dates = get_all_dates(music_root)
+                build_histogram(list(all_dates.values()))
+            print("\n[b green]ENTER to return to menu[/]")
             input()
 
         elif action == "13":
             # Audit date tags and write log
-            print(f"Auditing date tags in [cyan]{music}/[/] collection...")
-            audit_date_tags(music_root)
+            with c.status(f"[yellow]Auditing date tags in[/] [cyan]{music}/[/] collection..."):
+                audit_date_tags(music_root)
             print("[b green]\nENTER to return to menu[/]")
             input()
 
