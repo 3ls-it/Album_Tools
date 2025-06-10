@@ -5,8 +5,8 @@
 #
 # Colours:
 # pale yellow #f5d676
-# dark burnt red #681c2c
-__version__ = "0.1.11"
+
+__version__ = "0.1.12"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 import glob
@@ -15,9 +15,9 @@ import re
 import readline
 import shutil
 import subprocess as proc
-import sys
-from datetime import datetime
 
+# import sys
+from datetime import datetime
 from rich import print
 from rich.console import Console
 import requests
@@ -28,7 +28,6 @@ from yt_dlp.utils import DownloadError
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
-
 
 
 ### -------- User settings --------###
@@ -46,6 +45,7 @@ CODEC = "opus"
 
 ## Some needed global settings
 music = os.path.basename(os.path.normpath(music_root))
+os.chdir(music_root)
 try:
     os.chdir(music_root)
 except FileNotFoundError:
@@ -601,8 +601,10 @@ def main():
     while True:
         os.system("clear")
 
-        print(f"[b #f5d676]Album Tools v{__version__}[/]\n")
-        c.rule()
+        print()
+        c.rule(f"[b #f5d676]Album Tools v{__version__}[/]", style='#f5d676')
+        print()
+
         print("[#f5d676]Current Album Directory:[/]")
         print(f"[cyan]{name}[/]\n")
 
@@ -635,7 +637,7 @@ def main():
         )
         print("[b #f5d676]sh[/] = [#90ee90]Open shell[/]")
         print(" [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n")
-        c.rule()
+        c.rule(style='#f5d676')
 
         ## Action prompt
         action = input(">> ").strip()
