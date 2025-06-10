@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.13"
+__version__ = "0.1.14"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
