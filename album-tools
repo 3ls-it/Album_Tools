@@ -47,7 +47,6 @@ CODEC = "opus"
 
 ## Some needed global settings
 music = os.path.basename(os.path.normpath(music_root))
-os.chdir(music_root)
 try:
     os.chdir(music_root)
 except FileNotFoundError:
