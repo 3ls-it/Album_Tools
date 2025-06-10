@@ -6,20 +6,22 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
+from datetime import datetime
 import glob
 import os
 import re
 import readline
 import shutil
 import subprocess as proc
+import sys
 
-# import sys
-from datetime import datetime
 from rich import print
 from rich.console import Console
+from rich.panel import Panel
+from rich import box
 import requests
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -557,7 +559,6 @@ def open_shell(cwd):
     """
     Open an interactive shell in cwd.
     """
-
     os.chdir(cwd)
     # Launch an interactive shell in the current working directory
     cmd = [SHELL, "-i"]
@@ -571,7 +572,7 @@ def open_shell(cwd):
         print(f"[b yellow]Shell exited with code[/] [magenta]{e.returncode}[/]")
     except Exception as e:
         print(f"[b red]Unexpected error launching shell[/]: [white]{e}[/]")
-    # Pause so the user can read the error before the menu clears
+    # Pause so the user can read the error before the terminal clears
     print("[b green]Enter to return to the menu[/]")
     input()
 # End open_shell()
@@ -580,13 +581,15 @@ def open_shell(cwd):
 ## main
 def main():
     os.system("clear")
+    # Welcome screen 
     print(f"[b #f5d676 u]Welcome to Album Tools v{__version__}![/]\n")
     print(
-        f"Enter album directory name, or hit [b green]'ENTER'[/] for [cyan]{music}[/]"
+        f"Enter album directory name, or hit [b green]'ENTER'[/] for [cyan]{music}/[/]"
     )
     name = input("Directory: ").strip()
     full_name = music_root + name
 
+    # Sanity check 
     if not name:
         full_name = music_root
         name = music + "/"
@@ -601,43 +604,32 @@ def main():
     while True:
         os.system("clear")
 
-        print()
-        c.rule(f"[b #f5d676]Album Tools v{__version__}[/]", style='#f5d676')
-        print()
+        # The menu lines are justified as they are to be
+        # displayed in the terminal 
+        main_menu = f"""
+  [#f5d676]Current Album Directory:[/]
+  [cyan]{name}[/]
 
-        print("[#f5d676]Current Album Directory:[/]")
-        print(f"[cyan]{name}[/]\n")
+   [b #f5d676]1[/] = [b]List files[/] in current directory
+   [b #f5d676]2[/] = [b]Get dates[/] for all tracks in current directory
+   [b #f5d676]3[/] = [b]Set date[/] on all tracks in current directory
+   [b #f5d676]4[/] = [b]Set track number[/] on all tracks in current directory
+   [b #f5d676]5[/] = [b]Set common tags[/] on all tracks in current directory
+   [b #f5d676]6[/] = [b]Create new directory[/] in [cyan]{music}/[/]
+   [b #f5d676]7[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])
+   [b #f5d676]8[/] = [b]Download file[/], e.g, cover art ([u #ff7f7f]no postprocessing[/])
+   [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]
+  [b #f5d676]10[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
+  [b #f5d676]11[/] = [b]Scrub all filenames[/] in current directory
+  [b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection
+  [b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection
+  [b #f5d676]sh[/] = [#90ee90]Open shell[/]
+   [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n
+        """
 
-        print(" [b #f5d676]1[/] = [b]List files[/] in current directory")
-        print(" [b #f5d676]2[/] = [b]Get dates[/] for all tracks in current directory")
-        print(" [b #f5d676]3[/] = [b]Set date[/] on all tracks in current directory")
-        print(
-            " [b #f5d676]4[/] = [b]Set track number[/] on all tracks in current directory"
+        c.print(
+            Panel(main_menu, title=f"[b #f5d676]Album Tools v{__version__}[/]", box=box.ROUNDED)
         )
-        print(
-            " [b #f5d676]5[/] = [b]Set common tags[/] on all tracks in current directory"
-        )
-        print(f" [b #f5d676]6[/] = [b]Create new directory[/] in [cyan]{music}/[/]")
-        print(
-            " [b #f5d676]7[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])"
-        )
-        print(
-            " [b #f5d676]8[/] = [b]Download file[/], e.g, cover art ([u #ff7f7f]no postprocessing[/])"
-        )
-        print(f" [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]")
-        print(
-            f"[b #f5d676]10[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]"
-        )
-        print("[b #f5d676]11[/] = [b]Scrub all filenames[/] in current directory")
-        print(
-            f"[b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection"
-        )
-        print(
-            f"[b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection"
-        )
-        print("[b #f5d676]sh[/] = [#90ee90]Open shell[/]")
-        print(" [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n")
-        c.rule(style='#f5d676')
 
         ## Action prompt
         action = input(">> ").strip()
@@ -646,7 +638,6 @@ def main():
         ## Action choices
         if action == "1":
             # List files in dir
-            # #f5d676 = pale yellow
             ls = get_files_in_dir(full_name)
             print("")
             print(f"[b blue]{len(ls)} files in {name}:[/]")
@@ -863,7 +854,9 @@ def main():
 
         elif action == "13":
             # Audit date tags and write log
-            with c.status(f"[yellow]Auditing date tags in[/] [cyan]{music}/[/] collection..."):
+            with c.status(
+                    f"[yellow]Auditing date tags in[/] [cyan]{music}/[/] [yellow]collection[/]"
+            ):
                 audit_date_tags(music_root)
             print("[b green]\nENTER to return to menu[/]")
             input()
