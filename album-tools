@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.14"
+__version__ = "0.1.15"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -610,16 +610,16 @@ def main():
   [cyan]{name}[/]
 
    [b #f5d676]1[/] = [b]List files[/] in current directory
-   [b #f5d676]2[/] = [b]Get dates[/] for all tracks in current directory
-   [b #f5d676]3[/] = [b]Set date[/] on all tracks in current directory
-   [b #f5d676]4[/] = [b]Set track number[/] on all tracks in current directory
-   [b #f5d676]5[/] = [b]Set common tags[/] on all tracks in current directory
-   [b #f5d676]6[/] = [b]Create new directory[/] in [cyan]{music}/[/]
+   [b #f5d676]2[/] = [b]Get dates[/] for all current tracks
+   [b #f5d676]3[/] = [b]Set date[/] on all current tracks
+   [b #f5d676]4[/] = [b]Set track number[/] on all current tracks
+   [b #f5d676]5[/] = [b]Set common tags[/] on all current tracks
+   [b #f5d676]6[/] = [b]Scrub all filenames[/] in current directory
    [b #f5d676]7[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])
-   [b #f5d676]8[/] = [b]Download file[/], e.g, cover art ([u #ff7f7f]no postprocessing[/])
+   [b #f5d676]8[/] = [b]Download file[/]|cover art ([u #ff7f7f]no postprocessing[/])
    [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]
-  [b #f5d676]10[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
-  [b #f5d676]11[/] = [b]Scrub all filenames[/] in current directory
+  [b #f5d676]10[/] = [b]Create new directory[/] in [cyan]{music}/[/]
+  [b #f5d676]11[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
   [b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection
   [b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection
   [b #f5d676]sh[/] = [#90ee90]Open shell[/]
@@ -707,24 +707,11 @@ def main():
             input()
 
         elif action == "6":
-            # Make new dir
-            print(f"[yellow]Create a new directory under[/] [cyan]{music}[/]")
-            print("New directory name: ")
-            dirname = input().strip()
-
-            fulldir = f"{music_root}/{dirname}"
-            print("[b yellow]Create?[/]")
-            print("[[green]Y[/]/n]")
-            ans = input().strip()
-
-            if ans.lower() in ("n", "no"):
-                continue
-            else:
-                os.makedirs(fulldir, exist_ok=True)
-                print(
-                    f"\n[b green]Created[/] [b cyan]{fulldir}[/], [b green]ENTER to continue[/]"
-                )
-                input()
+            # Scrub file names in dir
+            scrub_filenames(full_name)
+            print(f"\nAll filenames in [cyan]{name}[/] have been scrubbed.")
+            print("[b green]ENTER to return to menu[/]")
+            input()
 
         elif action == "7":
             # Download album or track
@@ -828,17 +815,30 @@ def main():
                 full_name = music_root + name
 
         elif action == "10":
+            # Make new dir
+            print(f"[yellow]Create a new directory under[/] [cyan]{music}[/]")
+            print("New directory name: ")
+            dirname = input().strip()
+
+            fulldir = f"{music_root}/{dirname}"
+            print("[b yellow]Create?[/]")
+            print("[[green]Y[/]/n]")
+            ans = input().strip()
+
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                os.makedirs(fulldir, exist_ok=True)
+                print(
+                    f"\n[b green]Created[/] [b cyan]{fulldir}[/], [b green]ENTER to continue[/]"
+                )
+                input()
+
+        elif action == "11":
             # Scrub all dir names
             print(f"\n[yellow]Scrubbing all directory names in[/] [cyan]{music}[/].")
             scrub_dirs(music_root)
             print(f"\nAll directory names have been scrubbed in [cyan]{music}[/].")
-            print("[b green]ENTER to return to menu[/]")
-            input()
-
-        elif action == "11":
-            # Scrub file names in dir
-            scrub_filenames(full_name)
-            print(f"\nAll filenames in [cyan]{name}[/] have been scrubbed.")
             print("[b green]ENTER to return to menu[/]")
             input()
 
