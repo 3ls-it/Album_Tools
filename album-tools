@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.15"
+__version__ = "0.1.16"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -78,6 +78,8 @@ def completer(text, state):
         return None
 # End completer()
 
+# Remove '-' from the readline delimiter set 
+readline.set_completer_delims(' \t\n`~!@#$%^&*()=+[{]}\\|;:\'",<>/?')
 # Register completer function
 readline.set_completer(completer)
 # Use the tab key for completion
@@ -620,8 +622,7 @@ def main():
    [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]
   [b #f5d676]10[/] = [b]Create new directory[/] in [cyan]{music}/[/]
   [b #f5d676]11[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
-  [b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/] collection
-  [b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/] collection
+  [b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/]
   [b #f5d676]sh[/] = [#90ee90]Open shell[/]
    [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n
         """
