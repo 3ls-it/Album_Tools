@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.16"
+__version__ = "0.1.17"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -331,12 +331,23 @@ def do_yt_dlp(
             print(
                 f"[red]yt_dlp failed to process most or all of the playlist or track for URL:\n{url}[/]\nReason: {e}"
             )
+            print("[green]ENTER to continue[/]")
+            input()
             return None
 
         # Filter out None entries if this is a playlist
         if info and "entries" in info and isinstance(info["entries"], list):
             info["entries"] = [e for e in info["entries"] if e]
-        return info
+
+        # Try to determine album name. Try playlist_title, then title.
+        album_name = ""
+        if "playlist_title" in info and info["playlist_title"]:
+            album_name = info["playlist_title"]
+        elif "title" in info and info["title"]:
+            album_name = info["title"]
+        # Remove colon and leading/trailing whitespace if present
+        album_name = album_name.replace(":", "").replace("Album - ", "").strip() if album_name else ""
+        return album_name
     # End with
 # End do_yt_dlp()
 
@@ -730,10 +741,12 @@ def main():
                 os.makedirs(f"{music_root}tmp/", exist_ok=True)
                 os.chdir(tmp_dir)
                 print("[b green]Downloading...[/]")
-                do_yt_dlp(url)
+                album_name = do_yt_dlp(url)
+                if album_name is None:
+                    continue
 
                 # Set tracknumber in ID3 metadata
-                with c.status("\n[b #f5d676]Setting track number ID3 tags[/]"):
+                with c.status("\n[b #f5d676]Setting track number meta data[/]"):
                     set_tracknum(tmp_dir)
                 print("[b green]\nDownload complete. ENTER to continue[/]")
                 input()
@@ -754,8 +767,21 @@ def main():
                 input()
                 continue
             else:
-                print("\n[yellow]Name of directory to which the files will be moved[/]")
-                target_dir = input(": ").strip()
+                default_dir = album_name if album_name else ""
+                target_dir = ""
+                while not target_dir:
+                    if default_dir:
+                        print(f"\n[yellow]Name of directory to which the files will be moved [[/][cyan]{default_dir}[/]")
+                        t = input(": ").strip()
+                        # Use default if nothing entered 
+                        target_dir = t if t else default_dir
+                    else:
+                        print("\n[yellow]Name of directory to which the files will be moved[/]")
+                        t = input(": ").strip()
+                        if t:
+                            target_dir = t
+                        else:
+                            print("[red]A directory name is required.[/]")
                 os.makedirs(music_root + target_dir, exist_ok=True)
                 full_name = music_root + target_dir
 
