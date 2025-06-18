@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.17"
+__version__ = "0.1.18"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -134,8 +134,54 @@ def get_all_dates(directory: str) -> dict:
                 input(f"{e}")
                 continue
 
+
     return dates
 # End get_all_dates()
+
+
+def do_album_list(directory: str):
+    """
+    Scans all music files in {directory}, collects unique album/artist pairs,
+    and writes them as a two-column justified list to album_list-<timestamp>.txt in {music_root}.
+    """
+    files = get_files_in_dir(directory)
+    albums = set()
+    for file in files:
+        _, ext = os.path.splitext(file)
+        ext = ext.lower()
+        f = os.path.basename(file)
+        if ext in (".opus", ".ogg", ".mp3"):
+            try:
+                if ext == ".opus":
+                    meta = OggOpus(file)
+                elif ext == ".ogg":
+                    meta = OggVorbis(file)
+                elif ext == ".mp3":
+                    meta = EasyID3(file)
+                album = meta.get("album", [""])[0].strip()
+                artist = meta.get("artist", [""])[0].strip()
+                if album or artist:
+                    albums.add((album, artist))
+            except Exception as e:
+                print(f"[b red]Error reading album/artist field in {f}[/]")
+                print(f"{e}")
+                continue
+
+    album_col = max([len(a[0]) for a in albums] + [11])
+    artist_col = max([len(a[1]) for a in albums] + [12])
+    header = f"{'Album Name'.ljust(album_col)}  {'Artist Name'.ljust(artist_col)}"
+
+    lines = [header]
+    lines.append('-' * len(header))
+    for album, artist in sorted(albums):
+        lines.append(f"{album}; {artist}")
+
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    outfile = os.path.join(music_root, f"album_list-{timestamp}.txt")
+    with open(outfile, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+    print(f"\n[yellow]Album list written to[/] [#f5d676]{outfile}[/]\n")
+# End do_album_list()
 
 
 def set_all_dates(directory: str, newdate: str):
@@ -633,7 +679,9 @@ def main():
    [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]
   [b #f5d676]10[/] = [b]Create new directory[/] in [cyan]{music}/[/]
   [b #f5d676]11[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
-  [b #f5d676]13[/] = [b]Audit date tags[/] in [cyan]{music}/[/]
+  [b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/]
+  [b #f5d676]13[/] = [b]Generate Album list[/] for [cyan]{music}/[/]
+  [b #f5d676]14[/] = [b]Audit date tags[/] in [cyan]{music}/[/]
   [b #f5d676]sh[/] = [#90ee90]Open shell[/]
    [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n
         """
@@ -745,7 +793,7 @@ def main():
                 if album_name is None:
                     continue
 
-                # Set tracknumber in ID3 metadata
+                # Set tracknumber field in metadata
                 with c.status("\n[b #f5d676]Setting track number meta data[/]"):
                     set_tracknum(tmp_dir)
                 print("[b green]\nDownload complete. ENTER to continue[/]")
@@ -771,7 +819,7 @@ def main():
                 target_dir = ""
                 while not target_dir:
                     if default_dir:
-                        print(f"\n[yellow]Name of directory to which the files will be moved [[/][cyan]{default_dir}[/]")
+                        print(f"\n[yellow]Name of directory to which the files will be moved [/][[cyan]{default_dir}[/]]")
                         t = input(": ").strip()
                         # Use default if nothing entered 
                         target_dir = t if t else default_dir
@@ -879,9 +927,18 @@ def main():
             input()
 
         elif action == "13":
+            # Generate album/artist list 
+            with c.status(
+                    f"[yellow]Generating album list for[/] [cyan]{music}/[/]"
+            ):
+                do_album_list(music_root)
+            print("[b green]\nENTER to return to menu[/]")
+            input()
+
+        elif action == "14":
             # Audit date tags and write log
             with c.status(
-                    f"[yellow]Auditing date tags in[/] [cyan]{music}/[/] [yellow]collection[/]"
+                    f"[yellow]Auditing date tags in[/] [cyan]{music}/[/]"
             ):
                 audit_date_tags(music_root)
             print("[b green]\nENTER to return to menu[/]")
