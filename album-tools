@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.18"
+__version__ = "0.1.19"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -32,7 +32,7 @@ from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
 
 
-### -------- User settings --------###
+### -------- User settings --------### 
 # Set 'music_root' to the full path of your music collection directory.
 # Include trailing slash
 music_root = ""
@@ -43,10 +43,10 @@ FFMPEG = "/usr/bin/ffmpeg"
 CODEC = "opus"
 # CODEC = 'vorbis'
 # CODEC = 'mp3'
-### ---------------- ###
+### ---------------- ### 
+
 
 ## Some needed global settings
-music = os.path.basename(os.path.normpath(music_root))
 try:
     os.chdir(music_root)
 except FileNotFoundError:
@@ -54,6 +54,7 @@ except FileNotFoundError:
     print("See the README for instructions.")
     sys.exit()
 
+music = os.path.basename(os.path.normpath(music_root))
 tmp_dir = f"{music_root}tmp/"
 # To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~
 disallowed_chars = re.compile(r"[^\w\s.-]")
@@ -297,7 +298,7 @@ def do_file_dload(directory: str, file_name: str, url: str):
         print(f"Error downloading [b]{url}[/]: {e}")
     except Exception as e:
         print(e)
-# End get_album_cover()
+# End do_file_dload()
 
 
 def do_yt_dlp(
@@ -391,8 +392,12 @@ def do_yt_dlp(
             album_name = info["playlist_title"]
         elif "title" in info and info["title"]:
             album_name = info["title"]
-        # Remove colon and leading/trailing whitespace if present
-        album_name = album_name.replace(":", "").replace("Album - ", "").strip() if album_name else ""
+        # Remove:
+        # colon
+        # "Album - " (for YouTube Music album names) 
+        # leading/trailing whitespace if present
+        # Replace: forward slash with dash
+        album_name = album_name.replace(":", "").replace("Album - ", "").replace("/", "-").strip() if album_name else ""
         return album_name
     # End with
 # End do_yt_dlp()
@@ -565,8 +570,8 @@ def scrub_dirs(root_dir: str):
                 old_path = os.path.join(dirpath, dirname)
                 new_path = os.path.join(dirpath, suggested_new_name)
 
-                print(f"\nOld directory name: {old_path}")
-                print(f"Suggested new name: {new_path}")
+                print(f"\n[yellow]Old directory name:[/] [b blue]{dirname}[/]")
+                print(f"[yellow]Suggested new name:[/] [b cyan]{suggested_new_name}[/]")
 
                 print(
                     "Press Enter to accept, type a new name, or type 'skip' to leave unchanged: "
@@ -580,7 +585,7 @@ def scrub_dirs(root_dir: str):
 
                 try:
                     os.rename(old_path, new_path)
-                    print(f"[green]Renamed:[/] [cyan]{old_path} → {new_path}[/]")
+                    print(f"[green]Renamed:[/] [cyan]{dirname} → {suggested_new_name}[/]")
                 except Exception as e:
                     print(f"[red]Error renaming {old_path}:[/] {e}")
 # End scrub_dirs()
@@ -894,6 +899,7 @@ def main():
             print(f"[yellow]Create a new directory under[/] [cyan]{music}[/]")
             print("New directory name: ")
             dirname = input().strip()
+            dirname = dirname.replace("/", "-").replace(":", "")
 
             fulldir = f"{music_root}/{dirname}"
             print("[b yellow]Create?[/]")
@@ -905,7 +911,7 @@ def main():
             else:
                 os.makedirs(fulldir, exist_ok=True)
                 print(
-                    f"\n[b green]Created[/] [b cyan]{fulldir}[/], [b green]ENTER to continue[/]"
+                    f"\n[b green]Created[/] [b cyan]{dirname}[/], [b green]ENTER to continue[/]"
                 )
                 input()
 
