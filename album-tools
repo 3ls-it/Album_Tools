@@ -47,6 +47,7 @@ CODEC = "opus"
 
 
 ## Some needed global settings
+music = os.path.basename(os.path.normpath(music_root))
 try:
     os.chdir(music_root)
 except FileNotFoundError:
@@ -54,7 +55,6 @@ except FileNotFoundError:
     print("See the README for instructions.")
     sys.exit()
 
-music = os.path.basename(os.path.normpath(music_root))
 tmp_dir = f"{music_root}tmp/"
 # To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~
 disallowed_chars = re.compile(r"[^\w\s.-]")
@@ -222,20 +222,16 @@ def set_all_common(directory: str):
     """
 
     files = get_files_in_dir(directory)
+    print("[yellow]Press [green b]ENTER to skip[/] [yellow]a given field[/]\n")
     artist = input("Artist's/band's name: ").strip()
     album = input("Album name: ").strip()
-    albumartist = input(
-        "Album artist: 'ENTER' to use artist's name, or type in different name: "
-    ).strip()
+    albumartist = input("Album artist: ").strip()
     date = input("Recording/release date: ").strip()
     genre = input("Genre: ").strip()
 
-    if albumartist == "":
-        albumartist = artist
-
     name = os.path.basename(directory)
 
-    print(f"\nDo you want to write the following tags to all files in {name}?")
+    print(f"\n[yellow]Do you want to write the following tags to all files in[/] [cyan]{name}[/]?\n")
     print(f"Artist/Band: {artist}")
     print(f"Album name: {album}")
     print(f"Album Artist: {albumartist}")
@@ -261,11 +257,17 @@ def set_all_common(directory: str):
                     elif ext == ".mp3":
                         meta = EasyID3(file)
 
-                    meta["artist"] = [artist]
-                    meta["album"] = [album]
-                    meta["albumartist"] = [albumartist]
-                    meta["date"] = [date]
-                    meta["genre"] = [genre]
+                    if artist:
+                        meta["artist"] = [artist]
+                    if album:
+                        meta["album"] = [album]
+                    if albumartist:
+                        meta["albumartist"] = [albumartist]
+                    if date:
+                        meta["date"] = [date]
+                    if genre:
+                        meta["genre"] = [genre]
+
                     meta.save()
                     print("Re-wrote:")
                     print(f"[#f5d676]{f}[/]")
@@ -394,7 +396,7 @@ def do_yt_dlp(
             album_name = info["title"]
         # Remove:
         # colon
-        # "Album - " (for YouTube Music album names) 
+        # "Album - "
         # leading/trailing whitespace if present
         # Replace: forward slash with dash
         album_name = album_name.replace(":", "").replace("Album - ", "").replace("/", "-").strip() if album_name else ""
@@ -726,7 +728,7 @@ def main():
         elif action == "3":
             # Set dates on all tracks
             if full_name == music_root:
-                print("[b red]Don't change the dates of all files in /Music/![/]")
+                print("[b red]Don't change the dates of all files in {music}![/]")
                 print("[b green]\nENTER to go back to menu[/]")
                 input()
                 continue
@@ -767,6 +769,12 @@ def main():
 
         elif action == "5":
             # Set common tags
+            if full_name == music_root:
+                print("[b red]Don't change the tags of all files in {music}![/]")
+                print("[b green]\nENTER to go back to menu[/]")
+                input()
+                continue
+
             set_all_common(full_name)
             print("[b green]\nENTER to return to menu[/]")
             input()
@@ -876,7 +884,7 @@ def main():
                 input()
 
         elif action == "9":
-            # Change directory
+            # Change directory in music_root 
             os.chdir(music_root)
             print(
                 f"[yellow]Enter album directory name, or hit[/] [b green]'ENTER'[/] [yellow]for[/] [cyan]{music}[/]"
