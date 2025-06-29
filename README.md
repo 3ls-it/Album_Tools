@@ -6,7 +6,7 @@
 
   This started as a way for me to create a histogram of all the album dates in my collection, and grew into something else. (As often happens!)  
   
-  It was built and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. As such, any site|service that `yt-dlp` supports, is supported by `album-tools`. As such, it is important to keep `yt-dlp` (and the other dependencies) up to date.  
+  It was built and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. Any site|service that `yt-dlp` supports, is supported by `album-tools`. As such, it is important to keep `yt-dlp` (and the other dependencies) up to date.  
    
   When downloading an album, the album art is downloaded with the tracks. The files are re-encoded (Ogg Opus by default), and the filenames are pre-pended with the track number, and the track number is written to the metadata.  
 
