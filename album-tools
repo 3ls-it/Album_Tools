@@ -6,7 +6,7 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.20"
+__version__ = "0.1.21"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 from datetime import datetime
@@ -463,15 +463,32 @@ def audit_date_tags(directory: str, outpath: str = None):
                 elif ext == ".mp3":
                     meta = EasyID3(file)
                 if "date" in meta and meta["date"] and meta["date"][0].strip():
-                    try:
-                        year = int(meta["date"][0])
+                    date_str = meta["date"][0].strip()
+                    year_valid = False
+                    # Try as 4-digit integer year
+                    if re.fullmatch(r"\d{4}", date_str):
+                        year = int(date_str)
                         if 1900 <= year <= 2100:
-                            valid_dates += 1
-                        else:
-                            entry = f"Improbable year '{meta['date'][0]}' in: {f}"
-                            log_entries.append(entry)
-                    except ValueError:
-                        entry = f"Non-numeric date '{meta['date'][0]}' in: {f}"
+                            year_valid = True
+                    # Try as yyyy-mm pattern
+                    elif re.fullmatch(r"(\d{4})-(\d{2})", date_str):
+                        m = re.fullmatch(r"(\d{4})-(\d{2})", date_str)
+                        year = int(m.group(1))
+                        month = int(m.group(2))
+                        if 1900 <= year <= 2100 and 1 <= month <= 12:
+                            year_valid = True
+                    # Try as yyyy-mm-dd pattern
+                    elif re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", date_str):
+                        try:
+                            dt = datetime.strptime(date_str, "%Y-%m-%d")
+                            if 1900 <= dt.year <= 2100:
+                                year_valid = True
+                        except ValueError:
+                            year_valid = False
+                    if year_valid:
+                        valid_dates += 1
+                    else:
+                        entry = f"Malformed or improbable date '{date_str}' in: {f}"
                         log_entries.append(entry)
                 else:
                     entry = f"Missing date tag in: {f}"
