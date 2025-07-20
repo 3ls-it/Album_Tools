@@ -1,5 +1,7 @@
 ## Album Tools  
 
+July 2025: Working on v0.2.0 Release with Beets integration!  
+
 ### About  
 
   `album-tools` is terminal based tool for managing your music collection, and downloading and/or creating music albums. It has been designed to meet my own needs. Your mileage may vary as your own needs and work flow are different than mine. If it's useful to you, Great! If you like it, and have suggestions/changes, let me know.  
@@ -8,7 +10,7 @@
   
   It was built and is used on Unix-like systems and requires `FFMPEG` to do the reencoding and `yt-dlp` to download. Any site|service that `yt-dlp` supports, is supported by `album-tools`. As such, it is important to keep `yt-dlp` (and the other dependencies) up to date.  
    
-  When downloading an album, the album art is downloaded with the tracks. The files are re-encoded (Ogg Opus by default), and the filenames are pre-pended with the track number, and the track number is written to the metadata.  
+  When downloading an album, the album art is downloaded with the tracks. The files are re-encoded (Ogg Opus by default), the filenames are pre-pended with the track number, and the track number is written to the metadata.  
 
 
 ### Installation
