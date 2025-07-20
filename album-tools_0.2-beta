@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python3
+#!/usr/bin/env python3
 # album-tools
 # (c) 2025 J. Adams jfa63[at]duck[dot]com
 # Released under the Two-clause BSD License
@@ -54,8 +54,8 @@ config_path = config_dir / "settings.py"
 ## Include trailing slash 
 music_root  = str(Path.home() / "Music_Collection") + "/"
 ## Set paths to your shell and `ffmpeg`
-SHELL       = "/data/data/com.termux/files/usr/bin/bash"
-FFMPEG      = "/data/data/com.termux/files/usr/bin/ffmpeg"
+SHELL       = "/usr/bin/bash"
+FFMPEG      = "/usr/bin/ffmpeg"
 ## Set preferred supported encoding
 CODEC       = "opus"
 #CODEC       = 'vorbis'
@@ -526,12 +526,56 @@ def beet_import(directory):
 # End beet_import() 
 
 
-def beet_search(flag, query):
+def beets_search(flag, terms):
     """
-    Searches the Beets DB. Equivalent of `beet list <flag> <query>`
+    Searches the Beets DB for item or album names.
     """
-    _raw_main(['list', flag, query])
-# End beet_search() 
+
+    if flag.strip() == '-a':
+        query = f'album:"{terms}"'
+        items = library.items(query)
+    
+        for item in items:
+            full_path = item.path.decode('utf-8')
+            parent_dir = os.path.basename(os.path.dirname(full_path))
+            filename = os.path.basename(full_path)
+
+            aname = item.album
+            aartst = item.albumartist
+            ayear = item.year
+            agenre = item.genre
+            apath = os.path.join(music, parent_dir, filename)
+
+            print()
+            print(f"[#f5d676]Album:[/] [b white]{aname}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{aartst}[/]")
+            print(f"[#f5d676]Year:[/] [b white]{ayear}[/]")
+            print(f"[#f5d676]Genre:[/] [b white]{agenre}[/]")
+            print(f"[#f5d676]Path:[/] [b cyan]{apath}[/]")
+    else:  
+        query = f'title:"{terms}"'
+        items = library.items(query)
+    
+        for item in items:
+            full_path = item.path.decode('utf-8')
+            parent_dir = os.path.basename(os.path.dirname(full_path))
+            filename = os.path.basename(full_path)
+
+            title =item.title
+            aname = item.album
+            artst = item.artist
+            year = item.year
+            genre = item.genre
+            path = os.path.join(music, parent_dir, filename)
+
+            print()
+            print(f"[#f5d676]Title:[/] [b white]{title}[/]")
+            print(f"[#f5d676]Album:[/] [b white]{aname}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{artst}[/]")
+            print(f"[#f5d676]Year:[/] [b white]{year}[/]")
+            print(f"[#f5d676]Genre:[/] [b white]{genre}[/]")
+            print(f"[#f5d676]Path:[/] [b cyan]{path}[/]")
+# End beets_search() 
 
 
 def audit_date_tags(directory: str, outpath: str = None):
@@ -919,7 +963,7 @@ def do_beets_menu(directory: str, dname: str):
             print("[yellow]Search albums[yellow]?[/]")
             q = input(": ").strip()
             print("")
-            beet_search('-a', q)
+            beets_search('-a', q)
             print(return_msg)
             input()
 
@@ -927,7 +971,7 @@ def do_beets_menu(directory: str, dname: str):
             print("[yellow]Search tracks[yellow][/]")
             q = input(": ").strip()
             print("")
-            beet_search('', q)
+            beets_search('', q)
             print(return_msg)
             input()
 
