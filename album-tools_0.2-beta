@@ -42,7 +42,7 @@ from mutagen import File, MutagenError
 # Experimental beets integration 
 from beets.library import Library
 #from beets.ui import config as beets_config
-from beets.ui import _raw_main, _configure
+#from beets.ui import _raw_main, _configure
 
 
 
@@ -526,56 +526,61 @@ def beet_import(directory):
 # End beet_import() 
 
 
-def beets_search(flag, terms):
+def search_tracks(query):
     """
-    Searches the Beets DB for item or album names.
+    Searches the Beets DB for tracks.
     """
 
-    if flag.strip() == '-a':
-        query = f'album:"{terms}"'
-        items = library.items(query)
-    
-        for item in items:
-            full_path = item.path.decode('utf-8')
-            parent_dir = os.path.basename(os.path.dirname(full_path))
-            filename = os.path.basename(full_path)
+    format_str = "$title\t$album\t$artist\t$albumartist\t$year\t$genre\t$path"
+    cli_args = ["beet", "list", "--format", format_str, query]
+    output = proc.check_output(cli_args, text=True)
 
-            aname = item.album
-            aartst = item.albumartist
-            ayear = item.year
-            agenre = item.genre
-            apath = os.path.join(music, parent_dir, filename)
-
-            print()
-            print(f"[#f5d676]Album:[/] [b white]{aname}[/]")
-            print(f"[#f5d676]Artist:[/] [b white]{aartst}[/]")
-            print(f"[#f5d676]Year:[/] [b white]{ayear}[/]")
-            print(f"[#f5d676]Genre:[/] [b white]{agenre}[/]")
-            print(f"[#f5d676]Path:[/] [b cyan]{apath}[/]")
-    else:  
-        query = f'title:"{terms}"'
-        items = library.items(query)
-    
-        for item in items:
-            full_path = item.path.decode('utf-8')
-            parent_dir = os.path.basename(os.path.dirname(full_path))
-            filename = os.path.basename(full_path)
-
-            title =item.title
-            aname = item.album
-            artst = item.artist
-            year = item.year
-            genre = item.genre
-            path = os.path.join(music, parent_dir, filename)
+    for line in output.strip().splitlines():
+        # defensive: only split into 6 fields, rest joins into path
+        fields = line.split('\t', 6)
+        if len(fields) == 7:
+            title, album, artist, albumartist, year, genre, path = fields
+            parent_dir = os.path.basename(os.path.dirname(path))
+            filename = os.path.basename(path)
+            path = os.path.join(parent_dir, filename)
 
             print()
             print(f"[#f5d676]Title:[/] [b white]{title}[/]")
-            print(f"[#f5d676]Album:[/] [b white]{aname}[/]")
-            print(f"[#f5d676]Artist:[/] [b white]{artst}[/]")
+            print(f"[#f5d676]Album:[/] [b white]{album}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{artist}[/]")
+            print(f"[#f5d676]Albumartist:[/] [b white]{albumartist}[/]")
             print(f"[#f5d676]Year:[/] [b white]{year}[/]")
             print(f"[#f5d676]Genre:[/] [b white]{genre}[/]")
             print(f"[#f5d676]Path:[/] [b cyan]{path}[/]")
-# End beets_search() 
+# End search_tracks() 
+
+
+def search_albums(query):
+    """
+    Searches the Beets DB for albums.
+    """
+
+    format_str = "$albumartist\t$album\t$year\t$genre\t$path"
+    cli_args = ["beet", "list", "-a", "--format", format_str, query]
+    output = proc.check_output(cli_args, text=True)
+
+    for line in output.strip().splitlines():
+        # defensive: only split into 5 fields, rest joins into path to avoid
+        #tabs in filenames making mistakes
+        fields = line.split('\t', 4)
+        if len(fields) == 5:
+            albumartist, album, year, genre, path = fields
+            parent_dir = os.path.basename(os.path.dirname(path))
+            filename = os.path.basename(path)
+            path = os.path.join(parent_dir, filename)
+
+            print()
+            print(f"[#f5d676]Album:[/] [b white]{album}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{albumartist}[/]")
+            print(f"[#f5d676]Year:[/] [b white]{year}[/]")
+            print(f"[#f5d676]Genre:[/] [b white]{genre}[/]")
+            print(f"[#f5d676]Path:[/] [b cyan]{path}/[/]")
+# End search_albums() 
 
 
 def audit_date_tags(directory: str, outpath: str = None):
@@ -930,7 +935,7 @@ def do_beets_menu(directory: str, dname: str):
   [#f5d676]Current Album Directory:[/]
   [cyan]{dname}[/]
 
-  [b #f5d676]1[/] = [b]Import all albums in current directory to Beets DB[/]
+  [b #f5d676]1[/] = [b]Import current directory to Beets library[/]
   [b #f5d676]2[/] = [b]Search albums[/]
   [b #f5d676]3[/] = [b]Search tracks[/]
 
@@ -960,10 +965,11 @@ def do_beets_menu(directory: str, dname: str):
             input()
 
         elif action == "2":
-            print("[yellow]Search albums[yellow]?[/]")
+            print("[yellow]Search in albums[/]")
             q = input(": ").strip()
             print("")
-            beets_search('-a', q)
+            search_albums(q)
+            #beets_search('-a', q)
             print(return_msg)
             input()
 
@@ -971,7 +977,7 @@ def do_beets_menu(directory: str, dname: str):
             print("[yellow]Search tracks[yellow][/]")
             q = input(": ").strip()
             print("")
-            beets_search('', q)
+            search_tracks(q)
             print(return_msg)
             input()
 
@@ -1264,6 +1270,8 @@ def main():
         input()
         full_name = music_root
         name = music + "/"
+    #else:
+        #name = os.path.join(music, name)
 
     ## Menu loop
     while True:
@@ -1285,9 +1293,8 @@ def main():
 
   [b #f5d676]dl[/] = [b]Download Options[/]
   [b #f5d676]md[/] = [b]View|Edit Metadata[/]
-  [b #f5d676]db[/] = [b]Beets database[/]
+  [b #f5d676]db[/] = [b]Beets Library[/]
   [b #f5d676]st[/] = [b]Stats|Lists|Audits[/]
-
   [b #f5d676]sh[/] = [#90ee90]Open shell[/]
    [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n
         """
@@ -1329,6 +1336,7 @@ def main():
             )
             name_input = directory_prompt("Directory: ")
             name = os.path.basename(os.path.normpath(name_input)) + "/"
+            name = os.path.join(music, name)
             full_name = name_input
 
             if not os.path.isdir(full_name):
@@ -1372,6 +1380,7 @@ def main():
             if os.getcwd() != full_name:
                 os.chdir(full_name)
                 name = os.path.basename(os.path.normpath(full_name))
+                name = os.path.join(music, name)
 
         elif action.lower() == "md":
             do_metadata_menu(full_name, name)
