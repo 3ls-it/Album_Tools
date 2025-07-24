@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python3
+#!/usr/bin/env python3
 # album-tools
 # (c) 2025 J. Adams jfa63[at]duck[dot]com
 # Released under the Two-clause BSD License
@@ -54,8 +54,8 @@ config_path = config_dir / "settings.py"
 ## Include trailing slash 
 music_root  = str(Path.home() / "Music_Collection") + "/"
 ## Set paths to your shell and `ffmpeg`
-SHELL       = "/data/data/com.termux/files/usr/bin/bash"
-FFMPEG      = "/data/data/com.termux/files/usr/bin/ffmpeg"
+SHELL       = "/usr/bin/bash"
+FFMPEG      = "/usr/bin/ffmpeg"
 ## Set preferred supported encoding
 CODEC       = "opus"
 #CODEC       = 'vorbis'
