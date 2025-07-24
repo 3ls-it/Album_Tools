@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python3
 # album-tools
 # (c) 2025 J. Adams jfa63[at]duck[dot]com
 # Released under the Two-clause BSD License
@@ -42,7 +42,7 @@ from mutagen import File, MutagenError
 # Experimental beets integration 
 from beets.library import Library
 #from beets.ui import config as beets_config
-#from beets.ui import _raw_main, _configure
+from beets.ui import UserError, _raw_main, _configure
 
 
 
@@ -54,8 +54,8 @@ config_path = config_dir / "settings.py"
 ## Include trailing slash 
 music_root  = str(Path.home() / "Music_Collection") + "/"
 ## Set paths to your shell and `ffmpeg`
-SHELL       = "/usr/bin/bash"
-FFMPEG      = "/usr/bin/ffmpeg"
+SHELL       = "/data/data/com.termux/files/usr/bin/bash"
+FFMPEG      = "/data/data/com.termux/files/usr/bin/ffmpeg"
 ## Set preferred supported encoding
 CODEC       = "opus"
 #CODEC       = 'vorbis'
@@ -90,7 +90,6 @@ _configure({'-c': beets_cf})
 # Sets "no download" for testing
 if len(sys.argv) > 1 and sys.argv[1].strip() == "-n":
     DLOAD = False
-
 
 
 
@@ -228,6 +227,12 @@ def set_all_dates(directory: str, newdate: str):
     """
     Sets the date tag on all files in {directory}
     """
+    if (directory+'/') == music_root:
+        print(f"[red]You are attempting to set [b]ALL[/] date tags in {music}![/]")
+        print("[yellow b]You probably don't want to do that.[/]")
+        input()
+        return
+
     files = get_files_in_dir(directory)
 
     for file in files:
@@ -259,6 +264,11 @@ def set_all_common(directory: str):
     """
     Set the common tags for all files in the album directory.
     """
+    if (directory+'/') == music_root:
+        print(f"[red]You are attempting to set [b]ALL[/] common tags in {music}![/]")
+        print("[yellow b]You probably don't want to do that.[/]")
+        input()
+        return
 
     files = get_files_in_dir(directory)
     print("[yellow]Press [green b]ENTER to skip[/] [yellow]a given field[/]\n")
@@ -407,7 +417,7 @@ def do_yt_dlp(
         print(
             f"[red]Warning: CODEC '{CODEC}' is not supported. Please set CODEC to 'opus, 'vorbis' or 'mp3' in the 'User settings' section.[/red]"
         )
-        return None
+        return ''
 
     postprocessors.append({"key": "FFmpegMetadata"})
     ydl_opts["postprocessors"] = postprocessors
@@ -421,7 +431,7 @@ def do_yt_dlp(
             )
             print("[green]ENTER to continue[/]")
             input()
-            return None
+            return ''
 
         # Filter out None entries if this is a playlist
         if info and "entries" in info and isinstance(info["entries"], list):
@@ -522,13 +532,47 @@ def beet_import(directory):
     moved|copied. In other words, the import behaviour is  determined by the users
     beets/config.yaml. If the config has no import directives, defaults are used.
     """
+    # Generates it's own error msg 
     _raw_main(['import', directory])
 # End beet_import() 
 
 
+def beet_remove(directory):
+    """
+    Does the equivalent of `beet remove -a <directory>`. If run in music_root,
+    it will remove all album entries in the collection. The user's beets
+    configuration will determine if the import is auto-tagged, and 'in-place' or
+    moved|copied. In other words, the import behaviour is  determined by the users
+    beets/config.yaml. If the config has no import directives, defaults are used.
+    """
+    try:
+        _raw_main(['rm', '-a', directory])
+    except UserError:
+        # Provide an error msg 
+        print(f"No albums to remove in [cyan]{directory}[/].\n")
+        return
+    
+    print("[yellow]Album/tracks removed from library.[/]\n")
+# End beet_remove() 
+
+
+def beet_reimport(directory):
+    """
+    Does the equivalent of `beet rm -a <directory>`, then `beet import <directory>`. 
+    For use after making changes to the items in an album.
+    If run in music_root, it will re-import all albums in the collection. The user's beets
+    configuration will determine if the import is auto-tagged, and 'in-place' or
+    moved|copied. In other words, the import behaviour is  determined by the users
+    beets/config.yaml. If the config has no import directives, defaults are used.
+    """
+    beet_remove(directory)
+    beet_import(directory)
+# End beet_reimport() 
+
+
 def search_tracks(query):
     """
-    Searches the Beets DB for tracks.
+    Searches items/tracks in the Beets DB.
     """
 
     format_str = "$title\t$album\t$artist\t$albumartist\t$year\t$genre\t$path"
@@ -557,7 +601,7 @@ def search_tracks(query):
 
 def search_albums(query):
     """
-    Searches the Beets DB for albums.
+    Searches albums in the Beets DB.
     """
 
     format_str = "$albumartist\t$album\t$year\t$genre\t$path"
@@ -583,7 +627,7 @@ def search_albums(query):
 # End search_albums() 
 
 
-def audit_date_tags(directory: str, outpath: str = None):
+def audit_date_tags(directory: str):
     """
     Scans music files in the directory for missing or malformed date tags and writes a log file.
     """
@@ -645,14 +689,13 @@ def audit_date_tags(directory: str, outpath: str = None):
     log_body = summary + ["", "Problematic files:"] + log_entries
     log_text = "\n".join(log_body)
 
-    if not outpath:
-        stamp = (datetime.now()
-                 .replace(microsecond=0)
-                 .isoformat()
-                 .replace(":", "."))
+    stamp = (datetime.now()
+             .replace(microsecond=0)
+             .isoformat()
+             .replace(":", "."))
 
-        log_file = f"date_tag_audit_{stamp}.log"
-        out_path = os.path.join(directory, log_file)
+    log_file = f"date_tag_audit_{stamp}.log"
+    out_path = os.path.join(directory, log_file)
 
     try:
         with open(out_path, "w") as f:
@@ -915,7 +958,7 @@ def do_stats_menu():
             print(return_msg)
             input()
 
-        elif action.lower() in ('b', 'back'):
+        elif action.lower() in ('b', 'back', 'q'):
             break
 # End do_stats_menu() 
 
@@ -935,9 +978,10 @@ def do_beets_menu(directory: str, dname: str):
   [#f5d676]Current Album Directory:[/]
   [cyan]{dname}[/]
 
-  [b #f5d676]1[/] = [b]Import current directory to Beets library[/]
-  [b #f5d676]2[/] = [b]Search albums[/]
-  [b #f5d676]3[/] = [b]Search tracks[/]
+  [b #f5d676]1[/] = [b]Search albums[/]
+  [b #f5d676]2[/] = [b]Search tracks[/]
+  [b #f5d676]3[/] = [b]Import current album to Beets library[/]
+  [b #f5d676]4[/] = [b]Re-import current album to Beets library[/]
 
   [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
         """
@@ -952,6 +996,22 @@ def do_beets_menu(directory: str, dname: str):
 
         ## Action choices
         if action == "1":
+            print("[yellow]Search in albums[/]")
+            q = input(": ").strip()
+            print("")
+            search_albums(q)
+            print(return_msg)
+            input()
+
+        elif action == "2":
+            print("[yellow]Search tracks[yellow][/]")
+            q = input(": ").strip()
+            print("")
+            search_tracks(q)
+            print(return_msg)
+            input()
+
+        elif action == "3":
             print(f"[yellow]Import all albums in[/] [cyan]{dname}[/][yellow]?[/]")
             print("[[green]Y[/]/n]")
             ans = input(": ").strip()
@@ -964,24 +1024,20 @@ def do_beets_menu(directory: str, dname: str):
             print(return_msg)
             input()
 
-        elif action == "2":
-            print("[yellow]Search in albums[/]")
-            q = input(": ").strip()
-            print("")
-            search_albums(q)
-            #beets_search('-a', q)
+        elif action == "4":
+            print(f"[yellow]Re-import all albums in[/] [cyan]{dname}[/][yellow]?[/]")
+            print("[[green]Y[/]/n]")
+            ans = input(": ").strip()
+
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
+                beet_reimport(directory)
+
             print(return_msg)
             input()
 
-        elif action == "3":
-            print("[yellow]Search tracks[yellow][/]")
-            q = input(": ").strip()
-            print("")
-            search_tracks(q)
-            print(return_msg)
-            input()
-
-        elif action.lower() in ('b', 'back'):
+        elif action.lower() in ('b', 'back', 'q'):
             break
 # End do_beets_menu() 
 
@@ -1041,8 +1097,8 @@ def do_metadata_menu(full: str, dname: str):
 
         elif action == "3":
             # Set dates on all tracks
-            if full == music_root:
-                print("[b red]Don't change the dates of all files in {music}![/]")
+            if (full+'/') == music_root:
+                print(f"[b red]Don't change the dates of all files in {music}![/]")
                 print(return_msg)
                 input()
                 continue
@@ -1106,7 +1162,7 @@ def do_metadata_menu(full: str, dname: str):
                 print(return_msg)
                 input()
 
-        elif action.lower() in ('b', 'back'):
+        elif action.lower() in ('b', 'back', 'q'):
             break
 # End do_metadata_menu() 
 
@@ -1242,7 +1298,7 @@ def do_dload_menu(dirname: str, dname: str) -> str:
                 print(return_msg)
                 input()
 
-        elif action.lower() in ('b', 'back'):
+        elif action.lower() in ('b', 'back', 'q'):
             break
 
     return target_dir
@@ -1270,8 +1326,6 @@ def main():
         input()
         full_name = music_root
         name = music + "/"
-    #else:
-        #name = os.path.join(music, name)
 
     ## Menu loop
     while True:
