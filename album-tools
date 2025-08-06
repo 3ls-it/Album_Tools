@@ -6,43 +6,74 @@
 # Colours:
 # pale yellow #f5d676
 
-__version__ = "0.1.21"
+__version__ = "0.2.0-beta"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
+# Built-in imports 
+from collections import Counter
 from datetime import datetime
 import glob
 import os
+from pathlib import Path
 import re
-import readline
 import shutil
 import subprocess as proc
 import sys
 
+# Rich imports 
 from rich import print
 from rich.console import Console
 from rich.panel import Panel
 from rich import box
+
+# Prompt Toolkit imports 
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import PathCompleter
+
 import requests
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+
+# YT imports 
 import yt_dlp
 from yt_dlp.utils import DownloadError
+
+# Mutagen imports 
 from mutagen.oggopus import OggOpus
 from mutagen.oggvorbis import OggVorbis
 from mutagen.easyid3 import EasyID3
+from mutagen import File, MutagenError
+
+# Beets imports 
+from beets.library import Library
+#from beets.ui import config as beets_config
+from beets.ui import UserError, _raw_main, _configure
+
 
 
 ### -------- User settings --------### 
-# Set 'music_root' to the full path of your music collection directory.
-# Include trailing slash
-music_root = ""
-# Set paths to your shell and `ffmpeg`
-SHELL = "/usr/bin/bash"
-FFMPEG = "/usr/bin/ffmpeg"
-# Set preferred supported encoding
-CODEC = "opus"
-# CODEC = 'vorbis'
-# CODEC = 'mp3'
+# Define home directory and config paths
+config_dir  = Path.home() / ".album_tools"
+config_path = config_dir / "settings.py"
+
+## Set 'music_root' to the full path of your music collection directory.
+## Include trailing slash 
+music_root  = ""
+#music_root  = str(Path.home() / "Music_Collection") + "/"
+
+## Set paths to your shell and `ffmpeg`
+SHELL       = "/usr/bin/bash"
+FFMPEG      = "/usr/bin/ffmpeg"
+
+## Set preferred supported encoding
+CODEC       = "opus"
+#CODEC       = 'vorbis'
+#CODEC       = 'mp3'
+
+## Beets paths 
+# Set these to your needed values 
+beets_cf    = Path.home() / ".config/beets/config.yaml"
+beets_db    = Path.home() / ".beets/musiclibrary.db"
 ### ---------------- ### 
 
 
@@ -55,57 +86,69 @@ except FileNotFoundError:
     print("See the README for instructions.")
     sys.exit()
 
+# Temp download staging dir 
 tmp_dir = f"{music_root}tmp/"
+DLOAD = True
 # To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~
 disallowed_chars = re.compile(r"[^\w\s.-]")
+# Get a Rich Console instance 
 c = Console()
+# Initialize the Beets DB 
+library = Library(beets_db)
+# Load Beets config 
+_configure({'-c': beets_cf})
+
+# Sets "no download" for testing
+if len(sys.argv) > 1 and sys.argv[1].strip() == "-n":
+    DLOAD = False
 
 
 
-## Helper Functions
-def completer(text, state):
+## Helper Functions -------- #
+def directory_prompt(message: str) -> str:
     """
-    Function for readline to handle filename completion
+    Prompts for a directory name with tab completion using prompt_toolkit.
     """
-    # Expand user home (~) and environment variables
-    text = os.path.expanduser(os.path.expandvars(text))
-    # Append '*' to match files/directories starting with 'text'
-    matches = glob.glob(text + "*")
-    # Append '/' to directories
-    matches = [match + "/" if os.path.isdir(match) else match for match in matches]
-    try:
-        return matches[state]
-    except IndexError:
-        return None
-# End completer()
-
-# Remove '-' from the readline delimiter set 
-readline.set_completer_delims(' \t\n`~!@#$%^&*()=+[{]}\\|;:\'",<>/?')
-# Register completer function
-readline.set_completer(completer)
-# Use the tab key for completion
-readline.parse_and_bind("tab: complete")
+    completer = PathCompleter(only_directories=True, expanduser=True)
+    inp = prompt(message, completer=completer)
+    if not os.path.isabs(inp):
+        inp = os.path.join(music_root, inp)
+    return os.path.normpath(inp)
+# End directory_prompt() 
 
 
 def get_files_in_dir(directory: str) -> list:
     """
     Returns a list of filenames in {directory}
     """
-    file_list = []
-
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            file_list.append(os.path.join(root, file))
+    file_list = [entry.path for entry in os.scandir(directory) if entry.is_file()]
     file_list.sort()
+
     return file_list
 # End get_files_in_dir()
 
 
+def get_files_in_dir_tree(top_dir: str) -> list:
+    """
+    Returns a list of filenames in {directory} with recursion
+    Currently unused.
+    """
+    file_list = []
+
+    for root, dirs, files in os.walk(top_dir):
+        for file in files:
+            file_list.append(os.path.join(root, file))
+    file_list.sort()
+
+    return file_list
+# End get_files_in_dir_tree()
+
+
 def get_all_dates(directory: str) -> dict:
     """
-    Returns a dictionary of file:date tags from all files in {directory}
+    Returns a dictionary of file:date tags from all files in {directory}, recursive 
     """
-    files = get_files_in_dir(directory)
+    files = get_files_in_dir_tree(directory)
     dates = {}
 
     for file in files:
@@ -121,6 +164,7 @@ def get_all_dates(directory: str) -> dict:
                     meta = OggVorbis(file)
                 elif ext == ".mp3":
                     meta = EasyID3(file)
+
                 if "date" in meta and meta["date"] and meta["date"][0].strip():
                     try:
                         dates[file] = int(meta["date"][0])
@@ -135,60 +179,70 @@ def get_all_dates(directory: str) -> dict:
                 input(f"{e}")
                 continue
 
-
     return dates
 # End get_all_dates()
 
 
-def do_album_list(directory: str):
+def do_album_list():
     """
-    Scans all music files in {directory}, collects unique album/artist pairs,
-    and writes them as a two-column justified list to album_list-<timestamp>.txt in {music_root}.
+    Queries the Beets DB and collects unique album/artist pairs,
+    writes them as a two-column justified list to album_list-<timestamp>.txt in {music_root}.
     """
-    files = get_files_in_dir(directory)
     albums = set()
-    for file in files:
-        _, ext = os.path.splitext(file)
-        ext = ext.lower()
-        f = os.path.basename(file)
-        if ext in (".opus", ".ogg", ".mp3"):
-            try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                elif ext == ".ogg":
-                    meta = OggVorbis(file)
-                elif ext == ".mp3":
-                    meta = EasyID3(file)
-                album = meta.get("album", [""])[0].strip()
-                artist = meta.get("artist", [""])[0].strip()
-                if album or artist:
-                    albums.add((album, artist))
-            except Exception as e:
-                print(f"[b red]Error reading album/artist field in {f}[/]")
-                print(f"{e}")
-                continue
+
+    for item in library.items():
+        albums.add((item.album, item.albumartist))
 
     album_col = max([len(a[0]) for a in albums] + [11])
     artist_col = max([len(a[1]) for a in albums] + [12])
     header = f"{'Album Name'.ljust(album_col)}  {'Artist Name'.ljust(artist_col)}"
 
     lines = [header]
-    lines.append('-' * len(header))
     for album, artist in sorted(albums):
         lines.append(f"{album}; {artist}")
 
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    timestamp = datetime.now().strftime('%Y-%m-%dT%H.%M')
     outfile = os.path.join(music_root, f"album_list-{timestamp}.txt")
+
     with open(outfile, 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines))
+
     print(f"\n[yellow]Album list written to[/] [#f5d676]{outfile}[/]\n")
 # End do_album_list()
+
+
+def do_track_list():
+    """
+    Reads all items (tracks) in the Beets DB and writes to a file.
+    """
+    timestamp = datetime.now().strftime('%Y-%m-%dT%H.%M')
+    outfile = os.path.join(music_root, f"full_track_list-{timestamp}.txt")
+    tracks = []
+    tracks.append(f"Full Track List for {music}, {timestamp}\n\n")
+
+    for item in library.items():
+        tracks.append("Album Title: " + item.album)
+        tracks.append("Album Artist: " + item.albumartist)
+        tracks.append("Track Title: " + item.title)
+        tracks.append("Track Artist: " + item.artist + '\n')
+
+    with open(outfile, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(tracks))
+
+    print(f"\n[yellow]Track list written to[/] [#f5d676]{outfile}[/]\n")
+# End do_track_list() 
 
 
 def set_all_dates(directory: str, newdate: str):
     """
     Sets the date tag on all files in {directory}
     """
+    if (directory+'/') == music_root:
+        print(f"[red]You are attempting to set [b]ALL[/] date tags in {music}![/]")
+        print("[yellow b]You probably don't want to do that.[/]")
+        input()
+        return
+
     files = get_files_in_dir(directory)
 
     for file in files:
@@ -218,8 +272,13 @@ def set_all_dates(directory: str, newdate: str):
 
 def set_all_common(directory: str):
     """
-    Set the common tags for the whole album directory.
+    Set the common tags for all files in the album directory.
     """
+    if (directory+'/') == music_root:
+        print(f"[red]You are attempting to set [b]ALL[/] common tags in {music}![/]")
+        print("[yellow b]You probably don't want to do that.[/]")
+        input()
+        return
 
     files = get_files_in_dir(directory)
     print("[yellow]Press [green b]ENTER to skip[/] [yellow]a given field[/]\n")
@@ -307,7 +366,7 @@ def do_yt_dlp(
     url: str,
     output_template: str = "%(playlist_index)02d %(title)s.%(ext)s",
     ffmpeg_location: str = FFMPEG,
-) -> dict:
+) -> str:
     """
     Download an album or track with yt-dlp and encode audio as
     Ogg Opus, Ogg Vorbis, or MP3 with variable bitrate.
@@ -368,21 +427,21 @@ def do_yt_dlp(
         print(
             f"[red]Warning: CODEC '{CODEC}' is not supported. Please set CODEC to 'opus, 'vorbis' or 'mp3' in the 'User settings' section.[/red]"
         )
-        return None
+        return ''
 
     postprocessors.append({"key": "FFmpegMetadata"})
     ydl_opts["postprocessors"] = postprocessors
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
-            info: dict = ydl.extract_info(url, download=True)
+            info: dict = ydl.extract_info(url, download=DLOAD)
         except DownloadError as e:
             print(
                 f"[red]yt_dlp failed to process most or all of the playlist or track for URL:\n{url}[/]\nReason: {e}"
             )
             print("[green]ENTER to continue[/]")
             input()
-            return None
+            return ''
 
         # Filter out None entries if this is a playlist
         if info and "entries" in info and isinstance(info["entries"], list):
@@ -399,7 +458,10 @@ def do_yt_dlp(
         # "Album - "
         # leading/trailing whitespace if present
         # Replace: forward slash with dash
-        album_name = album_name.replace(":", "").replace("Album - ", "").replace("/", "-").strip() if album_name else ""
+        album_name = (album_name.replace(":", "")
+                      .replace("Album - ", "")
+                      .replace("/", "-")
+                      .strip() if album_name else "")
         return album_name
     # End with
 # End do_yt_dlp()
@@ -416,13 +478,13 @@ def set_tracknum(directory: str):
         basename = os.path.basename(fullpath)
         ext = ext.lower()
         track_num = basename[:2]
-        # album image often starts with '00', skip
-        if track_num == "00":
-            continue
         # Check that first two characters are digits
         match = re.match(r"^(\d{2})", basename)
+        # If no match, continue 
+        if not match:
+            continue
         # If so, write tracknumber tag
-        if match and ext in (".opus", ".ogg", ".mp3"):
+        elif match and ext in (".opus", ".ogg", ".mp3"):
             try:
                 if ext == ".opus":
                     meta = OggOpus(file)
@@ -436,18 +498,151 @@ def set_tracknum(directory: str):
 
             except Exception as e:
                 print(f"[red]Error processing {file}:[/] {e}")
-        elif not match:
-            print(f"[yellow]{file} does not seem to start with two digits.[/]")
-            print("[b green]\nENTER to continue[/]")
-            input()
+    # End for 
 # End set_tracknum()
 
 
-def audit_date_tags(directory: str, outpath: str = None):
+def strip_yt_tags(directory):
+    """
+    Removes metadata tags from YT.
+    """
+    files = get_files_in_dir(directory)
+    FIELDS_TO_REMOVE = ["DESCRIPTION", "PURL", "SYNOPSIS"]
+
+    for file in files:
+        filepath, ext = os.path.splitext(file)
+        basename = os.path.basename(file)
+        ext = ext.lower()
+
+        if ext in (".opus", ".ogg"):
+            try:
+                if ext == ".opus":
+                    meta = OggOpus(file)
+                else:
+                    meta = OggVorbis(file)
+
+                for field in FIELDS_TO_REMOVE:
+                    if field in meta:
+                        del meta[field]
+
+                meta.save()
+                print(f"[green]Processed:[/green] [#f5d676]{basename}[/]")
+
+            except MutagenError as e:
+                print(f"[bold red]Error processing {filepath}: {e}[/bold red]")
+                input()
+# End strip_yt_tags() 
+
+
+def beet_import(directory):
+    """
+    Does the equivalent of `beet import <directory>`. If run in music_root,
+    it will import all albums in the collection. The user's beets
+    configuration will determine if the import is auto-tagged, and 'in-place' or
+    moved|copied. In other words, the import behaviour is  determined by the users
+    beets/config.yaml. If the config has no import directives, defaults are used.
+    """
+    # Generates it's own error msg 
+    _raw_main(['import', directory])
+# End beet_import() 
+
+
+def beet_remove(directory):
+    """
+    Does the equivalent of `beet remove -a <directory>`. If run in music_root,
+    it will remove all album entries in the collection. The user's beets
+    configuration will determine if the import is auto-tagged, and 'in-place' or
+    moved|copied. In other words, the import behaviour is  determined by the users
+    beets/config.yaml. If the config has no import directives, defaults are used.
+    """
+    try:
+        _raw_main(['rm', '-a', directory])
+    except UserError:
+        # Provide an error msg 
+        print(f"No albums to remove in [cyan]{directory}[/].\n")
+        return
+    
+    print("[yellow]Album/tracks removed from library.[/]\n")
+# End beet_remove() 
+
+
+def beet_reimport(directory):
+    """
+    Does the equivalent of `beet rm -a <directory>`, then `beet import <directory>`. 
+    For use after making changes to the items in an album.
+    If run in music_root, it will re-import all albums in the collection. The user's beets
+    configuration will determine if the import is auto-tagged, and 'in-place' or
+    moved|copied. In other words, the import behaviour is  determined by the users
+    beets/config.yaml. If the config has no import directives, defaults are used.
+    """
+    beet_remove(directory)
+    beet_import(directory)
+# End beet_reimport() 
+
+
+def search_tracks(query):
+    """
+    Searches items/tracks in the Beets DB.
+    """
+
+    format_str = "$title\t$album\t$artist\t$albumartist\t$track\t$year\t$genre\t$path"
+    cli_args = ["beet", "list", "--format", format_str, query]
+    output = proc.check_output(cli_args, text=True)
+
+    for line in output.strip().splitlines():
+        # Split into 8 fields, the rest joins into path
+        fields = line.split('\t', 7)
+        if len(fields) == 8:
+            title, album, artist, albumartist, track, year, genre, path = fields
+            parent_dir = os.path.basename(os.path.dirname(path))
+            filename = os.path.basename(path)
+            path = os.path.join(parent_dir, filename)
+
+            print()
+            print(f"[#f5d676]Title:[/] [b white]{title}[/]")
+            print(f"[#f5d676]Album:[/] [b white]{album}[/]")
+            print(f"[#f5d676]Track Number:[/] [b white]{track}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{artist}[/]")
+            print(f"[#f5d676]Albumartist:[/] [b white]{albumartist}[/]")
+            print(f"[#f5d676]Year:[/] [b white]{year}[/]")
+            print(f"[#f5d676]Genre:[/] [b white]{genre}[/]")
+            print(f"[#f5d676]Path:[/] [b cyan]{path}[/]")
+# End search_tracks() 
+
+
+def search_albums(query):
+    """
+    Searches albums in the Beets DB.
+    """
+
+    format_str = "$albumartist\t$album\t$year\t$genre\t$path"
+    cli_args = ["beet", "list", "-a", "--format", format_str, query]
+    output = proc.check_output(cli_args, text=True)
+
+    for line in output.strip().splitlines():
+        # Only split into 5 fields, rest joins into path to avoid
+        #tabs in filenames making mistakes
+        fields = line.split('\t', 4)
+        if len(fields) == 5:
+            albumartist, album, year, genre, path = fields
+            parent_dir = os.path.basename(os.path.dirname(path))
+            filename = os.path.basename(path)
+            path = os.path.join(parent_dir, filename)
+
+            print()
+            print(f"[#f5d676]Album:[/] [b white]{album}[/]")
+            print(f"[#f5d676]Artist:[/] [b white]{albumartist}[/]")
+            print(f"[#f5d676]Year:[/] [b white]{year}[/]")
+            print(f"[#f5d676]Genre:[/] [b white]{genre}[/]")
+            print(f"[#f5d676]Path:[/] [b cyan]{path}/[/]")
+# End search_albums() 
+
+
+def audit_date_tags(directory: str):
     """
     Scans music files in the directory for missing or malformed date tags and writes a log file.
     """
-    files = get_files_in_dir(directory)
+    files = get_files_in_dir_tree(directory)
     log_entries = []
     valid_dates = 0
     for file in files:
@@ -505,16 +700,13 @@ def audit_date_tags(directory: str, outpath: str = None):
     log_body = summary + ["", "Problematic files:"] + log_entries
     log_text = "\n".join(log_body)
 
-    if not outpath:
-        stamp = (
-            datetime.now()
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("-", "")
-            .replace(":", "")
-        )
-        log_file = f"date_tag_audit_{stamp}.log"
-        out_path = os.path.join(directory, log_file)
+    stamp = (datetime.now()
+             .replace(microsecond=0)
+             .isoformat()
+             .replace(":", "."))
+
+    log_file = f"date_tag_audit_{stamp}.log"
+    out_path = os.path.join(directory, log_file)
 
     try:
         with open(out_path, "w") as f:
@@ -526,44 +718,45 @@ def audit_date_tags(directory: str, outpath: str = None):
 # End audit_date_tags()
 
 
-def build_histogram(dates: list):
+def build_histogram():
     """
-    Writes a .png histogram for all unique dates (years) in /Music/
+    Writes a .png histogram for all unique dates (years) in music collection.
+    Dates are pulled from Beets DB for speed.
     Handles empty or corrupted input gracefully, and provides file output info.
     """
+
+    stamp = datetime.now().strftime('%Y-%m-%dT%H.%M')
+
+    # Get date fields directly from the Beets DB 
+    dates = [item.year for item in library.items()]
+
     # Ensure we have a list with integer years only
     clean_dates = []
     for d in dates:
         try:
-            year = int(d)
-            # Optionally filter for (reasonable) year range, e.g. 1900-2100
-            if 1900 <= year <= 2100:
-                clean_dates.append(year)
+            if 1900 <= d <= 2100:
+                clean_dates.append(d)
             else:
                 print(f"[yellow]Warning: Ignoring improbable year: {d}")
         except Exception:
             print(f"[yellow]Warning: Ignoring invalid date value: {d}")
-
     if not clean_dates:
         print("[b red]No valid date tags found! Cannot generate histogram.[/]")
         return
 
-    unique = len(set(clean_dates))
-    n_bins = max(1, unique)
+    counts = Counter(clean_dates)
+    years = sorted(counts.keys())
+    track_counts = [counts[y] for y in years]
 
+    # Generate bar plot 
     try:
-        fig, axs = plt.subplots(figsize=(6, 5), layout="constrained")
-        axs.hist(clean_dates, bins=n_bins, color="#f5d676", edgecolor="#681c2c")
-        axs.set_xlabel("Album Year")
-        axs.set_ylabel("Count of Tracks/Files")
-        axs.set_title("Histogram of Track Dates in Collection")
-        stamp = (
-            datetime.now()
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("-", "")
-            .replace(":", "")
-        )
+        fig, axs = plt.subplots(figsize=(16, 9), layout="constrained")
+        axs.bar([str(y) for y in years], track_counts, color="#f5d676", edgecolor="#681c2c")
+        axs.set_xlabel("Track Year")
+        axs.set_ylabel("Count of Tracks/Files per Year")
+        axs.set_title(f"Histogram of Track Dates in {music} {stamp}")
+        axs.set_xticks(range(len(years)))
+        axs.set_xticklabels([str(y) for y in years], rotation=45, ha='right', fontsize=10)
         out_path = music_root + "/music_collection_dates-" + stamp + ".png"
         disp_path = music + "/music_collection_dates-" + stamp + ".png"
         plt.savefig(out_path)
@@ -610,18 +803,23 @@ def scrub_dirs(root_dir: str):
 # End scrub_dirs()
 
 
+def scrub_name(name: str) -> str:
+    # Let's replace '(' and ')'  with  a  '-'
+    name = name.replace("(", "-").replace(")", "-")
+    # Scrub
+    clean_name = disallowed_chars.sub("", name)
+    # replace spaces  with '_'
+    return clean_name.replace(" ", "_")
+# End scrub_name() 
+
+
 def scrub_filenames(a_dir: str):
     """
     Removes illegal characters from filenames
     """
     for path, dirs, files in os.walk(a_dir):
         for file in files:
-            # Let's replace '(' and ')'  with  a  '-'
-            o_name = file.replace("(", "-").replace(")", "-")
-            # Scrub
-            clean_name = disallowed_chars.sub("", o_name)
-            # replace spaces  with '_'
-            suggested_new_name = clean_name.replace(" ", "_")
+            suggested_new_name = scrub_name(file)
 
             if suggested_new_name != file:
                 old_name = os.path.join(path, file)
@@ -660,27 +858,46 @@ def open_shell(cwd):
 # End open_shell()
 
 
-## main
-def main():
-    os.system("clear")
-    # Welcome screen 
-    print(f"[b #f5d676 u]Welcome to Album Tools v{__version__}![/]\n")
-    print(
-        f"Enter album directory name, or hit [b green]'ENTER'[/] for [cyan]{music}/[/]"
-    )
-    name = input("Directory: ").strip()
-    full_name = music_root + name
+def print_tags(filename: str):
+    """
+    Prints all metadata tags for {filename}
+    """
+    # Get extension and filename
+    _, ext = os.path.splitext(filename)
+    fn = os.path.basename(filename)
+    meta = File(filename)
 
-    # Sanity check 
-    if not name:
-        full_name = music_root
-        name = music + "/"
-    elif not os.path.isdir(music_root + name):
-        print(f"Directory [cyan]{name}[/] does not exist. Using [cyan]{music}[/]")
-        print("[green]ENTER to continue[/]")
-        input()
-        full_name = music_root
-        name = music + "/"
+    # Errors only on suppoerted file types 
+    if meta is None and ext.lower() in (".opus", ".ogg", ".mp3"):
+        print(f"[red]Could not open file:[/] {fn}")
+        return
+
+    # Try to access tags in a robust way
+    tags = None
+
+    # Many Mutagen objects use .tags, but fallback to .items for dict-likes
+    if hasattr(meta, 'tags') and meta.tags:
+        tags = meta.tags.items()
+    elif hasattr(meta, 'items') and callable(meta.items):
+        # Fallback for some files
+        tags = meta.items()
+    else:
+        print(f"[yellow]No tags found in {fn}.[/]")
+        return
+
+    print(f"[blue]Metadata for[/] [#f5d676]{fn}[/]:")
+    for tag, value in tags:
+        print(f"[#f5d676]{tag}:[/] {value}")
+#End print_tags()
+
+
+
+## -------- Submenu functions
+def do_stats_menu():
+    """
+    Provides the statistics menu.
+    """
+    return_msg = "[b green]\nENTER to return to Stats Menu[/]"
 
     # Menu loop
     while True:
@@ -688,24 +905,461 @@ def main():
 
         # The menu lines are justified as they are to be
         # displayed in the terminal 
+        stats_menu = f"""
+  [#90ee90 u b]Stats Menu[/]
+
+  [b #f5d676]1[/] = [b]Display collection statistics[/]
+  [b #f5d676]2[/] = [b]Generate date histogram[/] for [cyan]{music}/[/]
+  [b #f5d676]3[/] = [b]Generate album list[/] for [cyan]{music}/[/]
+  [b #f5d676]4[/] = [b]Generate full track list[/] for [cyan]{music}/[/]
+  [b #f5d676]5[/] = [b]Audit date tags[/] in [cyan]{music}/[/]  
+
+  [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
+        """
+
+        c.print(
+            Panel(stats_menu, title=f"[b #f5d676]Album Tools v{__version__}[/]", box=box.ROUNDED)
+        )
+
+        ## Action prompt
+        action = input(">> ").strip()
+        os.system("clear")
+
+        ## Action choices
+        if action == "1":
+            #  Show Beets DB stats
+            print(f"[yellow]Collection statistics for[/] [cyan]{music}/[/]\n")
+            _raw_main(['stats'])
+            print(return_msg)
+            input()
+
+        elif action == "2":
+            # Build histogram
+            with c.status(f"[yellow]Building date histogram for[/] [cyan]{music}[/]"):
+                #os.chdir(music_root)
+                #all_dates = get_all_dates(music_root)
+                build_histogram()
+            print(return_msg)
+            input()
+
+        elif action == "3":
+            # Generate album/artist list 
+            with c.status(
+                    f"[yellow]Generating album list for[/] [cyan]{music}/[/]"
+            ):
+                do_album_list()
+            print(return_msg)
+            input()
+
+        elif action == "4":
+            # Generate full track list 
+            with c.status(
+                    f"[yellow]Generating full track list for[/] [cyan]{music}/[/]"
+            ):
+                do_track_list()
+            print(return_msg)
+            input()
+
+        elif action == "5":
+            # Audit date tags and write log
+            with c.status(
+                    f"[yellow]Auditing date tags in[/] [cyan]{music}/[/]"
+            ):
+                audit_date_tags(music_root)
+            print(return_msg)
+            input()
+
+        elif action.lower() in ('b', 'back', 'q'):
+            break
+# End do_stats_menu() 
+
+
+def do_beets_menu(directory: str, dname: str):
+    return_msg = "[b green]\nENTER to return to Beets Menu[/]"
+
+    # Menu loop
+    while True:
+        os.system("clear")
+
+        # The menu lines are justified as they are to be
+        # displayed in the terminal 
+        beets_menu = f"""
+  [#90ee90 u b]Beets Integration Menu[/]
+
+  [#f5d676]Current Album Directory:[/]
+  [cyan]{dname}[/]
+
+  [b #f5d676]1[/] = [b]Search albums[/]
+  [b #f5d676]2[/] = [b]Search tracks[/]
+  [b #f5d676]3[/] = [b]Import current album to Beets library[/]
+  [b #f5d676]4[/] = [b]Re-import current album to Beets library[/]
+
+  [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
+        """
+
+        c.print(
+            Panel(beets_menu, title=f"[b #f5d676]Album Tools v{__version__}[/]", box=box.ROUNDED)
+        )
+
+        ## Action prompt
+        action = input(">> ").strip()
+        os.system("clear")
+
+        ## Action choices
+        if action == "1":
+            print("[yellow]Search in albums[/]")
+            q = input(": ").strip()
+            print("")
+            search_albums(q)
+            print(return_msg)
+            input()
+
+        elif action == "2":
+            print("[yellow]Search tracks[yellow][/]")
+            q = input(": ").strip()
+            print("")
+            search_tracks(q)
+            print(return_msg)
+            input()
+
+        elif action == "3":
+            print(f"[yellow]Import all albums in[/] [cyan]{dname}[/][yellow]?[/]")
+            print("[[green]Y[/]/n]")
+            ans = input(": ").strip()
+
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
+                beet_import(directory)
+
+            print(return_msg)
+            input()
+
+        elif action == "4":
+            print(f"[yellow]Re-import all albums in[/] [cyan]{dname}[/][yellow]?[/]")
+            print("[[green]Y[/]/n]")
+            ans = input(": ").strip()
+
+            if ans.lower() in ('n', 'no'):
+                continue
+            else:
+                beet_reimport(directory)
+
+            print(return_msg)
+            input()
+
+        elif action.lower() in ('b', 'back', 'q'):
+            break
+# End do_beets_menu() 
+
+
+def do_metadata_menu(full: str, dname: str):
+    return_msg = "[b green]\nENTER to return to Metadata Menu[/]"
+
+    # Menu loop
+    while True:
+        os.system("clear")
+
+        # The menu lines are justified as they are to be
+        # displayed in the terminal 
+        meta_menu = f"""
+  [#90ee90 u b]Metadata Menu[/]
+
+  [#f5d676]Current Album Directory:[/]
+  [cyan]{dname}[/]
+
+  [b #f5d676]1[/] = [b]Display all tags[/] for current tracks
+  [b #f5d676]2[/] = [b]Display dates[/] for current tracks
+  [b #f5d676]3[/] = [b]Set date[/] on current tracks
+  [b #f5d676]4[/] = [b]Set track number[/] on current tracks
+  [b #f5d676]5[/] = [b]Set common tags[/] on current tracks
+  [b #f5d676]6[/] = [b]Remove YT tags[/] on current tracks
+
+  [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
+        """
+
+        c.print(
+            Panel(meta_menu, title=f"[b #f5d676]Album Tools v{__version__}[/]", box=box.ROUNDED)
+        )
+
+        ## Action prompt
+        action = input(">> ").strip()
+        os.system("clear")
+
+        ## Action choices
+        if action == "1":
+            # Display all tags
+            files = get_files_in_dir(full)
+            for file in files:
+                print_tags(file)
+                input()
+            print(return_msg)
+            input()
+
+        if action == "2":
+            # List dates for all tracsk in dir
+            all_dates = get_all_dates(full)
+            print(f"[b blue]\nDates in {music}/{dname}[/]")
+            for file, date in all_dates.items():
+                f = os.path.basename(file)
+                print(f"[b white]{date}: [/] [#f5d676]{f}[/]")
+            print(return_msg)
+            input()
+
+        elif action == "3":
+            # Set dates on all tracks
+            if (full+'/') == music_root:
+                print(f"[b red]Don't change the dates of all files in {music}![/]")
+                print(return_msg)
+                input()
+                continue
+
+            print("[yellow]Enter new date (YYYY)[/]")
+            new = input(": ").strip()
+            print(f"You have chosen to change this album's date to {new}")
+            print(f"All tracks in [cyan]{dname}[/] will have the date field modified.")
+            print("[b]Continue?[/] [[green]Y[/]/n]")
+            ans = input().strip()
+
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                print(f"Changing dates in {music}/{dname}")
+                set_all_dates(full, new)
+                all_dates = get_all_dates(full)
+                print(f"\nAll dates in {dname} changed to {new}.")
+                print(return_msg)
+                input()
+
+        elif action == "4":
+            # Set track number field
+            print(
+                f"[yellow]All tracks in[/] [cyan]{dname}[/] [yellow]whose file names start with a[/]"
+            )
+            print(
+                "[yellow]two-digit number will have that number written to the track number[/]"
+            )
+            print("[yellow]field.[/] [b]Continue?[/] [[green]Y[/]/n]")
+            ans = input().strip()
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                set_tracknum(full)
+                print(return_msg)
+                input()
+
+        elif action == "5":
+            # Set common tags
+            if full == music_root:
+                print("[b red]Don't change the tags of all files in {music}![/]")
+                print("[b green]\nENTER to go back to menu[/]")
+                input()
+                continue
+
+            set_all_common(full)
+            print(return_msg)
+            input()
+
+        elif action == "6":
+            # Strip out YT tags 
+            print("[yellow]Remove tags with YT metadata?[/]")
+            print("[[green]Y[/]/n]")
+            ans = input(": ").strip()
+
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                strip_yt_tags(full)
+                print(return_msg)
+                input()
+
+        elif action.lower() in ('b', 'back', 'q'):
+            break
+# End do_metadata_menu() 
+
+
+def do_dload_menu(dirname: str, dname: str) -> str:
+    return_msg = "[b green]\nENTER to return to Download Menu[/]"
+    target_dir = dirname
+
+    # Menu loop
+    while True:
+        os.system("clear")
+
+        # The menu lines are justified as they are to be
+        # displayed in the terminal 
+        dload_menu = f"""
+  [#90ee90 u b]Download Menu[/]
+
+  [#f5d676]Current Album Directory:[/]
+  [cyan]{dname}[/]
+
+  [b #f5d676]1[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])
+  [b #f5d676]2[/] = [b]Download file[/]|cover art ([u #ff7f7f]no postprocessing[/])
+
+  [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
+        """
+
+        c.print(
+            Panel(dload_menu, title=f"[b #f5d676]Album Tools v{__version__}[/]", box=box.ROUNDED)
+        )
+
+        ## Action prompt
+        action = input(">> ").strip()
+        os.system("clear")
+
+        ## Action choices
+        if action == "1":
+            # Download album or track
+            print("[yellow]Album/Playlist URL[/]")
+            url = input(": ").strip()
+            print(
+                f"\n[yellow]Download album/track?[/] (Will be staged in [cyan]{music}/tmp/[/])"
+            )
+            print("[[b green]Y[/]/n]")
+            ans = input().strip()
+
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                os.makedirs(f"{music_root}tmp/", exist_ok=True)
+                os.chdir(tmp_dir)
+                print("[b green]Downloading...[/]")
+                album_name = do_yt_dlp(url)
+                if album_name is None:
+                    continue
+
+                # Set tracknumber field in metadata
+                with c.status("\n[b #f5d676]Setting track number metadata[/]"):
+                    set_tracknum(tmp_dir)
+                print("[b green]\nDownload complete. ENTER to continue[/]")
+                input()
+
+            # Make all dirs under music_root visible to completer
+            os.chdir(music_root)
+            # Move dloaded files into album directory
+            print(
+                "[yellow]Do you wish create an album directory for these downloaded files?[/]"
+            )
+            print("[[green]Y[/]/n]")
+            move_files = input().strip()
+
+            if move_files.lower() in ("no", "n"):
+                print(f"\nLeaving downloaded files in [cyan]{tmp_dir}[/]")
+                print("[yellow]You will want to move them before downloading again.[/]")
+                print("[b green]ENTER to continue[/]")
+                input()
+                target_dir = music_root
+                continue
+            else:
+                default_dir = scrub_name(album_name) if album_name else ""
+                target_dir = ""
+
+                while not target_dir:
+                    if default_dir:
+                        print(f"\n[yellow]Name of directory to which the files will be moved [/][[cyan]{default_dir}[/]]")
+                        t = directory_prompt("Directory: ")
+
+                        # Use default if nothing entered 
+                        if (t + "/") == music_root:
+                            target_dir = music_root + default_dir
+                            dname = default_dir
+                        else:
+                            target_dir = t
+                            dname = os.path.basename(os.path.normpath(t))
+                    else:
+                        print("\n[yellow]Name of directory to which the files will be moved[/]")
+                        t = directory_prompt("Directory: ")
+                        
+                        if t:
+                            target_dir = t
+                            dname = os.path.basename(os.path.normpath(t))
+                        else:
+                            print("[red]A directory name is required.[/]")
+
+                os.makedirs(target_dir, exist_ok=True)
+                os.chdir(target_dir)
+                to_copy = glob.glob(os.path.join(tmp_dir, "*"))
+
+                print(f"Moving files into album directory [cyan]{dname}[/]")
+                for file in to_copy:
+                    shutil.copy(file, target_dir)
+                    f = os.path.basename(file)
+                    print(f"[#f5d676]{f}[/]")
+                # Clear tmp/
+                shutil.rmtree(tmp_dir)
+                print(return_msg)
+                input()
+
+        elif action == "2":
+            # Download file
+            full_path = music_root + dname
+            url = input("File URL: ").strip()
+            fname = input("Name for file: ").strip()
+            print(f"[yellow]Download file to[/] [#f5d676]{fname}[/]?")
+            print("[[green]Y[/]/n]")
+            ans = input().strip()
+
+            if ans.lower() in ("n", "no"):
+                continue
+            else:
+                print("[green]Downloading...[/]")
+                do_file_dload(full_path, fname, url)
+                print(f"Saved file as [#f5d676]{fname}[/].")
+                print(return_msg)
+                input()
+
+        elif action.lower() in ('b', 'back', 'q'):
+            break
+
+    return target_dir
+# End do_dload_menu() 
+
+
+
+## main -------- #
+def main():
+    os.system("clear")
+
+    # Welcome dialogue 
+    print(f"[b #f5d676 u]Welcome to Album Tools v{__version__}![/]\n")
+    print(
+        f"Enter album directory name, or hit [b green]'ENTER'[/] for [cyan]{music}/[/]"
+    )
+    name_input = directory_prompt("Directory: ")
+    name = os.path.basename(os.path.normpath(name_input)) + "/"
+    full_name = name_input
+
+    if not os.path.isdir(full_name):
+        dname = os.path.basename(os.path.normpath(name_input))
+        print(f"Directory [cyan]{dname}[/] does not exist. Using [cyan]{music}[/]")
+        print("[green]ENTER to continue[/]")
+        input()
+        full_name = music_root
+        name = music + "/"
+
+    ## Menu loop
+    while True:
+        os.system("clear")
+
+        # The menu lines are justified as they are to be
+        # displayed in the terminal 
         main_menu = f"""
+  [#90ee90 u b]Main Menu[/]
+
   [#f5d676]Current Album Directory:[/]
   [cyan]{name}[/]
 
-   [b #f5d676]1[/] = [b]List files[/] in current directory
-   [b #f5d676]2[/] = [b]Get dates[/] for all current tracks
-   [b #f5d676]3[/] = [b]Set date[/] on all current tracks
-   [b #f5d676]4[/] = [b]Set track number[/] on all current tracks
-   [b #f5d676]5[/] = [b]Set common tags[/] on all current tracks
-   [b #f5d676]6[/] = [b]Scrub all filenames[/] in current directory
-   [b #f5d676]7[/] = [b]Download album[/] or track ([u #90ee90]with postprocessing[/])
-   [b #f5d676]8[/] = [b]Download file[/]|cover art ([u #ff7f7f]no postprocessing[/])
-   [b #f5d676]9[/] = [b]Change directory[/] in [cyan]{music}/[/]
-  [b #f5d676]10[/] = [b]Create new directory[/] in [cyan]{music}/[/]
-  [b #f5d676]11[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
-  [b #f5d676]12[/] = [b]Generate date histogram[/] for [cyan]{music}/[/]
-  [b #f5d676]13[/] = [b]Generate Album list[/] for [cyan]{music}/[/]
-  [b #f5d676]14[/] = [b]Audit date tags[/] in [cyan]{music}/[/]
+  [b #f5d676]1[/] = [b]List files[/] in current directory
+  [b #f5d676]2[/] = [b]Scrub all filenames[/] in current directory
+  [b #f5d676]3[/] = [b]Change directory[/] in [cyan]{music}/[/]
+  [b #f5d676]4[/] = [b]Create new directory[/] in [cyan]{music}/[/]
+  [b #f5d676]5[/] = [b]Scrub all directory names[/] in [cyan]{music}/[/]
+
+  [b #f5d676]dl[/] = [b]Download Options[/]
+  [b #f5d676]md[/] = [b]View|Edit Metadata[/]
+  [b #f5d676]db[/] = [b]Beets Library[/]
+  [b #f5d676]st[/] = [b]Stats|Lists|Audits[/]
   [b #f5d676]sh[/] = [#90ee90]Open shell[/]
    [b #f5d676]q[/] = [b u #ff7f7f]Quit[/]\n
         """
@@ -733,193 +1387,38 @@ def main():
             input()
 
         elif action == "2":
-            # List dates for all tracsk in dir
-            all_dates = get_all_dates(full_name)
-            print(f"[b blue]\nDates in {music}/{name}[/]")
-            for file, date in all_dates.items():
-                f = os.path.basename(file)
-                print(f"[b white]{date}: [/] [#f5d676]{f}[/]")
-            print("[b green]\nENTER to return to menu[/]")
-            input()
-
-        elif action == "3":
-            # Set dates on all tracks
-            if full_name == music_root:
-                print("[b red]Don't change the dates of all files in {music}![/]")
-                print("[b green]\nENTER to go back to menu[/]")
-                input()
-                continue
-
-            print("[yellow]Enter new date (YYYY)[/]")
-            new = input(": ").strip()
-            print(f"You have chosen to change this album's date to {new}")
-            print(f"All tracks in [cyan]{name}[/] will have the date field modified.")
-            print("[b]Continue?[/] [[green]Y[/]/n]")
-            ans = input().strip()
-
-            if ans.lower() in ("n", "no"):
-                continue
-            else:
-                print(f"Changing dates in {music}/{name}")
-                set_all_dates(full_name, new)
-                all_dates = get_all_dates(full_name)
-                print(f"\nAll dates in {name} changed to {new}.")
-                print("[b green]\nENTER to return to menu[/]")
-                input()
-
-        elif action == "4":
-            # Set track number field
-            print(
-                f"[yellow]All tracks in[/] [cyan]{name}[/] [yellow]whose file names start with a[/]"
-            )
-            print(
-                "[yellow]two-digit number will have that number written to the track number[/]"
-            )
-            print("[yellow]field.[/] [b]Continue?[/] [[green]Y[/]/n]")
-            ans = input().strip()
-            if ans.lower() in ("n", "no"):
-                continue
-            else:
-                set_tracknum(full_name)
-                print("[b green]\nENTER to return to menu[/]")
-                input()
-
-        elif action == "5":
-            # Set common tags
-            if full_name == music_root:
-                print("[b red]Don't change the tags of all files in {music}![/]")
-                print("[b green]\nENTER to go back to menu[/]")
-                input()
-                continue
-
-            set_all_common(full_name)
-            print("[b green]\nENTER to return to menu[/]")
-            input()
-
-        elif action == "6":
             # Scrub file names in dir
             scrub_filenames(full_name)
             print(f"\nAll filenames in [cyan]{name}[/] have been scrubbed.")
             print("[b green]ENTER to return to menu[/]")
             input()
 
-        elif action == "7":
-            # Download album or track
-            print("[yellow]Album/Playlist URL[/]")
-            url = input(": ").strip()
-            print(
-                f"\n[yellow]Download album/track?[/] (Will be staged in [cyan]{music}/tmp/[/])"
-            )
-            print("[[b green]Y[/]/n]")
-            ans = input().strip()
-
-            if ans.lower() in ("n", "no"):
-                continue
-            else:
-                os.makedirs(f"{music_root}tmp/", exist_ok=True)
-                os.chdir(tmp_dir)
-                print("[b green]Downloading...[/]")
-                album_name = do_yt_dlp(url)
-                if album_name is None:
-                    continue
-
-                # Set tracknumber field in metadata
-                with c.status("\n[b #f5d676]Setting track number meta data[/]"):
-                    set_tracknum(tmp_dir)
-                print("[b green]\nDownload complete. ENTER to continue[/]")
-                input()
-
-            # Make all dirs under music_root visible
-            os.chdir(music_root)
-            # Move dloaded files into album directory
-            print(
-                "[yellow]Do you wish create an album directory for these downloaded files?[/]"
-            )
-            print("[[green]Y[/]/n]")
-            move_files = input().strip()
-
-            if move_files.lower() in ("no", "n"):
-                print(f"\nLeaving downloaded files in [cyan]{tmp_dir}[/]")
-                print("[yellow]You will want to move them before downloading again.[/]")
-                print("[b green]ENTER to continue[/]")
-                input()
-                continue
-            else:
-                default_dir = album_name if album_name else ""
-                target_dir = ""
-                while not target_dir:
-                    if default_dir:
-                        print(f"\n[yellow]Name of directory to which the files will be moved [/][[cyan]{default_dir}[/]]")
-                        t = input(": ").strip()
-                        # Use default if nothing entered 
-                        target_dir = t if t else default_dir
-                    else:
-                        print("\n[yellow]Name of directory to which the files will be moved[/]")
-                        t = input(": ").strip()
-                        if t:
-                            target_dir = t
-                        else:
-                            print("[red]A directory name is required.[/]")
-                os.makedirs(music_root + target_dir, exist_ok=True)
-                full_name = music_root + target_dir
-
-                # Set new directory name
-                if not target_dir:
-                    name = f"{music}"
-                else:
-                    name = target_dir
-
-                os.chdir(full_name)
-                to_copy = glob.glob(os.path.join(tmp_dir, "*"))
-
-                print(f"Moving files into album directory [cyan]{name}[/]")
-                for file in to_copy:
-                    shutil.copy(file, full_name)
-                    f = os.path.basename(file)
-                    print(f"[#f5d676]{f}[/]")
-                # Clear tmp/
-                shutil.rmtree(tmp_dir)
-                print("[b green]\nDone. ENTER to return to menu.[/]")
-                input()
-
-        elif action == "8":
-            # Download file
-            full_path = music_root + name
-            url = input("File URL: ").strip()
-            fname = input("Name for file: ").strip()
-            print(f"[yellow]Download file to[/] [#f5d676]{fname}[/]?")
-            print("[[green]Y[/]/n]")
-            ans = input().strip()
-
-            if ans.lower() in ("n", "no"):
-                continue
-            else:
-                print("[green]Downloading...[/]")
-                do_file_dload(full_path, fname, url)
-                print(f"Saved file as [#f5d676]{fname}[/].")
-                print("[b green]ENTER to return to menu.[/]")
-                input()
-
-        elif action == "9":
+        elif action == "3":
             # Change directory in music_root 
             os.chdir(music_root)
             print(
                 f"[yellow]Enter album directory name, or hit[/] [b green]'ENTER'[/] [yellow]for[/] [cyan]{music}[/]"
             )
-            name = input("Directory: ").strip()
-
-            if not name:
-                full_name = music_root
+            name_input = directory_prompt("Directory: ")
+            # If input is empty, change to music_root 
+            if (name_input+"/") == music_root: 
                 name = music + "/"
-            elif not os.path.isdir(music_root + name):
+                full_name = music_root
+            # Else, change to entered directory 
+            else:
+                name = os.path.basename(os.path.normpath(name_input)) + "/"
+                name = os.path.join(music, name)
+                full_name = name_input
+
+            # If directory is nonexistant, change to music_root
+            if not os.path.isdir(full_name):
                 print(f"[red]Directory [b]{name}[/] does not exist. Check the name.[/]")
                 print("[b green]ENTER to return to menu[/]")
                 input()
+                full_name = music_root
                 name = music + "/"
-            else:
-                full_name = music_root + name
 
-        elif action == "10":
+        elif action == "4":
             # Make new dir
             print(f"[yellow]Create a new directory under[/] [cyan]{music}[/]")
             print("New directory name: ")
@@ -940,7 +1439,7 @@ def main():
                 )
                 input()
 
-        elif action == "11":
+        elif action == "5":
             # Scrub all dir names
             print(f"\n[yellow]Scrubbing all directory names in[/] [cyan]{music}[/].")
             scrub_dirs(music_root)
@@ -948,38 +1447,26 @@ def main():
             print("[b green]ENTER to return to menu[/]")
             input()
 
-        elif action == "12":
-            # Build histogram
-            with c.status(f"[yellow]Building date histogram for[/] [cyan]{music}[/]"):
-                os.chdir(music_root)
-                all_dates = get_all_dates(music_root)
-                build_histogram(list(all_dates.values()))
-            print("\n[b green]ENTER to return to menu[/]")
-            input()
+        elif action.lower() == "dl":
+            full_name = do_dload_menu(full_name, name)
+            if os.getcwd() != full_name:
+                os.chdir(full_name)
+                name = os.path.basename(os.path.normpath(full_name))
+                name = os.path.join(music, name)
 
-        elif action == "13":
-            # Generate album/artist list 
-            with c.status(
-                    f"[yellow]Generating album list for[/] [cyan]{music}/[/]"
-            ):
-                do_album_list(music_root)
-            print("[b green]\nENTER to return to menu[/]")
-            input()
+        elif action.lower() == "md":
+            do_metadata_menu(full_name, name)
 
-        elif action == "14":
-            # Audit date tags and write log
-            with c.status(
-                    f"[yellow]Auditing date tags in[/] [cyan]{music}/[/]"
-            ):
-                audit_date_tags(music_root)
-            print("[b green]\nENTER to return to menu[/]")
-            input()
+        elif action.lower() == "st":
+            do_stats_menu()
+
+        elif action.lower() == "db":
+            do_beets_menu(full_name, name)
 
         elif action.lower() == "sh":
             open_shell(full_name)
 
         elif action.lower() == "q":
-            print("Bye!")
             break
 
         else:
