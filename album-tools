@@ -3,10 +3,10 @@
 # (c) 2025 J. Adams jfa63[at]duck[dot]com
 # Released under the Two-clause BSD License
 #
-# Colours:
+# Custom colours:
 # pale yellow #f5d676
 
-__version__ = "0.2.0-beta"
+__version__ = "0.2.0"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 # Built-in imports 
@@ -1296,7 +1296,7 @@ def do_dload_menu(dirname: str, dname: str) -> str:
             full_path = music_root + dname
             url = input("File URL: ").strip()
             fname = input("Name for file: ").strip()
-            print(f"[yellow]Download file to[/] [#f5d676]{fname}[/]?")
+            print(f"[green]Download file to[/] [#f5d676 b]{music}/{dname}{fname}[/]?")
             print("[[green]Y[/]/n]")
             ans = input().strip()
 
@@ -1305,7 +1305,7 @@ def do_dload_menu(dirname: str, dname: str) -> str:
             else:
                 print("[green]Downloading...[/]")
                 do_file_dload(full_path, fname, url)
-                print(f"Saved file as [#f5d676]{fname}[/].")
+                print(f"[green]Saved file as[/] [#f5d676 b]{dname}{fname}[/].")
                 print(return_msg)
                 input()
 
