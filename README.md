@@ -1,6 +1,6 @@
 ## Album Tools  
 
-July 2025: Working on v0.2.0 Release with Beets integration!  
+August 2025: v0.2.0 Release with Beets integration!  
 
 ### About  
 
