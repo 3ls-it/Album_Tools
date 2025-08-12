@@ -1,6 +1,6 @@
 ## Album Tools  
 
-August 2025: v0.2.1 with minor fixes. Need to update README.
+August 2025: v0.2.1 with minor fixes. Need to update README.  
 August 2025: v0.2.0 Release with Beets integration!  
 
 ### About  
