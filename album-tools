@@ -6,7 +6,7 @@
 # Custom colours:
 # pale yellow #f5d676
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 # Built-in imports 
@@ -59,6 +59,7 @@ config_path = config_dir / "settings.py"
 ## Set 'music_root' to the full path of your music collection directory.
 ## Include trailing slash 
 music_root  = ""
+# Example: 
 #music_root  = str(Path.home() / "Music_Collection") + "/"
 
 ## Set paths to your shell and `ffmpeg`
@@ -71,7 +72,7 @@ CODEC       = "opus"
 #CODEC       = 'mp3'
 
 ## Beets paths 
-# Set these to your needed values 
+# Set these examples to your needed values 
 beets_cf    = Path.home() / ".config/beets/config.yaml"
 beets_db    = Path.home() / ".beets/musiclibrary.db"
 ### ---------------- ### 
@@ -93,10 +94,17 @@ DLOAD = True
 disallowed_chars = re.compile(r"[^\w\s.-]")
 # Get a Rich Console instance 
 c = Console()
-# Initialize the Beets DB 
-library = Library(beets_db)
-# Load Beets config 
-_configure({'-c': beets_cf})
+# Initialize Beets DB Library
+try:
+    library = Library(beets_db)
+    # Load Beets config 
+    _configure({'-c': beets_cf})
+except Exception as e:
+    print("[yellow]Beets said:[/]")
+    print(f"[red]{type(e).__name__}[/]")
+    print(f"[red]{e}[/]")
+    print("\n[yellow b]You probably need to set up Beets.[/]")
+    sys.exit()
 
 # Sets "no download" for testing
 if len(sys.argv) > 1 and sys.argv[1].strip() == "-n":
@@ -340,13 +348,12 @@ def do_file_dload(directory: str, file_name: str, url: str):
     """
     Download a file such as an album cover
     """
-
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
         total_size = int(response.headers.get("content-length", 0))
         file_path = os.path.join(directory, file_name)
-        os.makedirs(directory, exist_ok=True)
+
         with (
             open(file_path, "wb") as f,
             tqdm(total=total_size, unit="B", unit_scale=True, desc=file_name) as pbar,
@@ -355,6 +362,7 @@ def do_file_dload(directory: str, file_name: str, url: str):
                 if chunk:
                     f.write(chunk)
                     pbar.update(len(chunk))
+
     except requests.RequestException as e:
         print(f"Error downloading [b]{url}[/]: {e}")
     except Exception as e:
@@ -841,18 +849,23 @@ def open_shell(cwd):
     """
     os.chdir(cwd)
     # Launch an interactive shell in the current working directory
-    cmd = [SHELL, "-i"]
+    # Try running a `screen` session first. If that fails, fall back
+    # to running SHELL.
+    cmd = ["screen", "-t", f"Album Tools v{__version__}"]
     try:
         proc.run(cmd, check=True)
     except FileNotFoundError:
-        print(f"[b red]Shell executable not found[/]: [cyan]{SHELL}[/]")
-    except PermissionError:
-        print(f"[b red]Permission denied[/] when launching: [cyan]{SHELL}[/]")
-    except proc.CalledProcessError as e:
-        print(f"[b yellow]Shell exited with code[/] [magenta]{e.returncode}[/]")
-    except Exception as e:
-        print(f"[b red]Unexpected error launching shell[/]: [white]{e}[/]")
-    # Pause so the user can read the error before the terminal clears
+        try:
+            proc.run([SHELL, "-i"], check=True)
+        except FileNotFoundError:
+            print(f"[b red]Shell executable not found[/]: [cyan]{SHELL}[/]")
+        except PermissionError:
+            print(f"[b red]Permission denied[/] when launching: [cyan]{SHELL}[/]")
+        except proc.CalledProcessError as e:
+            print(f"[b yellow]Shell exited with code[/] [magenta]{e.returncode}[/]")
+        except Exception as e:
+            print(f"[b red]Unexpected error launching shell[/]: [white]{e}[/]")
+        # Pause so the user can read the error before the terminal clears
     print("[b green]Enter to return to the menu[/]")
     input()
 # End open_shell()
@@ -1293,10 +1306,16 @@ def do_dload_menu(dirname: str, dname: str) -> str:
 
         elif action == "2":
             # Download file
-            full_path = music_root + dname
+
+            # Set path correctly if CWD is music_root 
+            if dname == music+"/":
+                full_path = music_root
+            else:
+                full_path = music_root + dname
+
             url = input("File URL: ").strip()
             fname = input("Name for file: ").strip()
-            print(f"[green]Download file to[/] [#f5d676 b]{music}/{dname}{fname}[/]?")
+            print(f"[green]Download file to[/] [#f5d676 b]{dname}{fname}[/]?")
             print("[[green]Y[/]/n]")
             ans = input().strip()
 
