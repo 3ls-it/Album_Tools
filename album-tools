@@ -6,7 +6,7 @@
 # Custom colours:
 # pale yellow #f5d676
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "J. Adams jfa63[at]duck[dot]com"
 
 # Built-in imports 
@@ -39,9 +39,6 @@ import yt_dlp
 from yt_dlp.utils import DownloadError
 
 # Mutagen imports 
-from mutagen.oggopus import OggOpus
-from mutagen.oggvorbis import OggVorbis
-from mutagen.easyid3 import EasyID3
 from mutagen import File, MutagenError
 
 # Beets imports 
@@ -66,9 +63,10 @@ music_root  = ""
 SHELL       = "/usr/bin/bash"
 FFMPEG      = "/usr/bin/ffmpeg"
 
-## Set preferred supported encoding
+## Set preferred codec for re-encoding downloads 
 CODEC       = "opus"
 #CODEC       = 'vorbis'
+#CODEC       = "flac"
 #CODEC       = 'mp3'
 
 ## Beets paths 
@@ -89,6 +87,7 @@ except FileNotFoundError:
 
 # Temp download staging dir 
 tmp_dir = f"{music_root}tmp/"
+# We download by default 
 DLOAD = True
 # To be striped from filenames:  !"#$%&'()*+,/:;<=>?@[\]^`{|}~
 disallowed_chars = re.compile(r"[^\w\s.-]")
@@ -112,7 +111,9 @@ if len(sys.argv) > 1 and sys.argv[1].strip() == "-n":
 
 
 
+
 ## Helper Functions -------- #
+#
 def directory_prompt(message: str) -> str:
     """
     Prompts for a directory name with tab completion using prompt_toolkit.
@@ -123,6 +124,18 @@ def directory_prompt(message: str) -> str:
         inp = os.path.join(music_root, inp)
     return os.path.normpath(inp)
 # End directory_prompt() 
+
+
+def filename_prompt(message: str, music_cwd: str) -> str:
+    """
+    Prompts for a file name with tab completion using prompt_toolkit.
+    """
+    completer = PathCompleter(only_directories=False, expanduser=True)
+    inp = prompt(message, completer=completer)
+    if not os.path.isabs(inp):
+        inp = os.path.join(music_cwd, inp)
+    return os.path.normpath(inp)
+# End filename_prompt() 
 
 
 def get_files_in_dir(directory: str) -> list:
@@ -160,32 +173,26 @@ def get_all_dates(directory: str) -> dict:
     dates = {}
 
     for file in files:
-        _, ext = os.path.splitext(file)
-        ext = ext.lower()
+        # For displaying filename 
         f = os.path.basename(file)
+        try:
+            meta = File(file)
+        except Exception as e:
+            print(file)
+            print(e)
 
-        if ext in (".opus", ".ogg", ".mp3"):
+        if not meta:
+            continue
+
+        if "date" in meta and meta["date"] and meta["date"][0].strip():
             try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                elif ext == ".ogg":
-                    meta = OggVorbis(file)
-                elif ext == ".mp3":
-                    meta = EasyID3(file)
-
-                if "date" in meta and meta["date"] and meta["date"][0].strip():
-                    try:
-                        dates[file] = int(meta["date"][0])
-                    except ValueError:
-                        print(
-                            f"[yellow]Warning: Non-numeric date in {f}: {meta['date'][0]} — skipping file.[/]"
-                        )
-                else:
-                    print(f"[yellow]Warning: No date found in {f}, skipping.[/]")
-            except Exception as e:
-                print(f"[b red]Error. Unable to read Date field in\n{f} [/]")
-                input(f"{e}")
-                continue
+                dates[file] = int(meta["date"][0])
+            except ValueError:
+                print(
+                    f"[yellow]Warning: Non-numeric date in {f}: {meta['date'][0]} — skipping file.[/]"
+                )
+        else:
+            print(f"[yellow]Warning: No date found in {f}, skipping.[/]")
 
     return dates
 # End get_all_dates()
@@ -254,27 +261,25 @@ def set_all_dates(directory: str, newdate: str):
     files = get_files_in_dir(directory)
 
     for file in files:
-        _, ext = os.path.splitext(file)
-        ext = ext.lower()
         f = os.path.basename(file)
+        try:
+            meta = File(file)
+        except Exception as e:
+            print(file)
+            print(e)
 
-        if ext in (".opus", ".ogg", ".mp3"):
-            try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                elif ext == ".ogg":
-                    meta = OggVorbis(file)
-                elif ext == ".mp3":
-                    meta = EasyID3(file)
+        if not meta:
+            continue
 
-                meta["date"] = [newdate]
-                meta.save()
-                print("Re-wrote:")
-                print(f"[#f5d676]{f}[/]")
-                print("")
+        try:
+            meta["date"] = [newdate]
+            meta.save()
+            print("Re-wrote:")
+            print(f"[#f5d676]{f}[/]")
+            print("")
 
-            except Exception as e:
-                print(f"[red]Error processing {f}:[/] {e}")
+        except Exception as e:
+            print(f"[red]Error processing {f}:[/] {e}")
 # End set_all_dates()
 
 
@@ -311,36 +316,34 @@ def set_all_common(directory: str):
         return
     else:
         for file in files:
-            _, ext = os.path.splitext(file)
-            ext = ext.lower()
             f = os.path.basename(file)
+            try:
+                meta = File(file)
+            except Exception as e:
+                print(file)
+                print(e)
 
-            if ext in (".opus", ".ogg", ".mp3"):
-                try:
-                    if ext == ".opus":
-                        meta = OggOpus(file)
-                    elif ext == ".ogg":
-                        meta = OggVorbis(file)
-                    elif ext == ".mp3":
-                        meta = EasyID3(file)
+            if not meta:
+                continue
 
-                    if artist:
-                        meta["artist"] = [artist]
-                    if album:
-                        meta["album"] = [album]
-                    if albumartist:
-                        meta["albumartist"] = [albumartist]
-                    if date:
-                        meta["date"] = [date]
-                    if genre:
-                        meta["genre"] = [genre]
+            try:
+                if artist:
+                    meta["artist"] = [artist]
+                if album:
+                    meta["album"] = [album]
+                if albumartist:
+                    meta["albumartist"] = [albumartist]
+                if date:
+                    meta["date"] = [date]
+                if genre:
+                    meta["genre"] = [genre]
 
-                    meta.save()
-                    print("Re-wrote:")
-                    print(f"[#f5d676]{f}[/]")
-                    print("")
-                except Exception as e:
-                    print(f"[red]Error processing {f}:[/] {e}")
+                meta.save()
+                print("Re-wrote:")
+                print(f"[#f5d676]{f}[/]")
+                print("")
+            except Exception as e:
+                print(f"[red]Error processing {f}:[/] {e}")
 # End set_all_common()
 
 
@@ -390,7 +393,7 @@ def do_yt_dlp(
         "retries": 10,
     }
 
-    # Codec/Quality logic
+    ## Codec/Quality logic
     # Always start clean: remove postprocessor_args if present.
     ydl_opts.pop("postprocessor_args", None)
     codec = CODEC.lower().strip()
@@ -419,6 +422,16 @@ def do_yt_dlp(
         )
         ydl_opts["postprocessor_args"] = ["-c:a", "libvorbis"]
 
+    elif codec == "flac":
+        # FLAC support 
+        postprocessors.append(
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "flac",
+            }
+        )
+        ydl_opts["postprocessor_args"] = ["-c:a", "flac"]
+
     elif codec == "mp3":
         # MP3: -q:a N VBR-flag, 0 is best quality VBR (LAME V0). Default '0'
         qual = "0"
@@ -433,7 +446,7 @@ def do_yt_dlp(
 
     else:
         print(
-            f"[red]Warning: CODEC '{CODEC}' is not supported. Please set CODEC to 'opus, 'vorbis' or 'mp3' in the 'User settings' section.[/red]"
+            f"[red]Warning: CODEC '{CODEC}' is not supported. Please set CODEC to 'opus, 'vorbis', 'flac' or 'mp3' in the 'User settings' section.[/red]"
         )
         return ''
 
@@ -482,28 +495,29 @@ def set_tracknum(directory: str):
     files = get_files_in_dir(directory)
 
     for file in files:
-        fullpath, ext = os.path.splitext(file)
+        try:
+            meta = File(file)
+        except Exception as e:
+            print(file)
+            print(e)
+
+        if not meta:
+            continue
+
+        fullpath, _ = os.path.splitext(file)
         basename = os.path.basename(fullpath)
-        ext = ext.lower()
         track_num = basename[:2]
         # Check that first two characters are digits
         match = re.match(r"^(\d{2})", basename)
+
         # If no match, continue 
         if not match:
             continue
         # If so, write tracknumber tag
-        elif match and ext in (".opus", ".ogg", ".mp3"):
+        elif match:
             try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                elif ext == ".ogg":
-                    meta = OggVorbis(file)
-                elif ext == ".mp3":
-                    meta = EasyID3(file)
-
                 meta["tracknumber"] = [track_num]
                 meta.save()
-
             except Exception as e:
                 print(f"[red]Error processing {file}:[/] {e}")
     # End for 
@@ -518,27 +532,29 @@ def strip_yt_tags(directory):
     FIELDS_TO_REMOVE = ["DESCRIPTION", "PURL", "SYNOPSIS"]
 
     for file in files:
-        filepath, ext = os.path.splitext(file)
+        filepath, _ = os.path.splitext(file)
         basename = os.path.basename(file)
-        ext = ext.lower()
+        try:
+            meta = File(file)
+        except Exception as e:
+            print(file)
+            print(e)
 
-        if ext in (".opus", ".ogg"):
-            try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                else:
-                    meta = OggVorbis(file)
+        if not meta:
+            continue
 
-                for field in FIELDS_TO_REMOVE:
-                    if field in meta:
-                        del meta[field]
+        try:
 
-                meta.save()
-                print(f"[green]Processed:[/green] [#f5d676]{basename}[/]")
+            for field in FIELDS_TO_REMOVE:
+                if field in meta:
+                    del meta[field]
 
-            except MutagenError as e:
-                print(f"[bold red]Error processing {filepath}: {e}[/bold red]")
-                input()
+            meta.save()
+            print(f"[green]Processed:[/green] [#f5d676]{basename}[/]")
+
+        except MutagenError as e:
+            print(f"[bold red]Error processing {filepath}: {e}[/bold red]")
+            input()
 # End strip_yt_tags() 
 
 
@@ -583,7 +599,10 @@ def beet_reimport(directory):
     moved|copied. In other words, the import behaviour is  determined by the users
     beets/config.yaml. If the config has no import directives, defaults are used.
     """
+    print("[yellow]We need to remove track entries, then re-import[/]","\n[green]ENTER[/]")
+    input()
     beet_remove(directory)
+    print("[green]Re-importing[/]")
     beet_import(directory)
 # End beet_reimport() 
 
@@ -654,51 +673,52 @@ def audit_date_tags(directory: str):
     log_entries = []
     valid_dates = 0
     for file in files:
-        _, ext = os.path.splitext(file)
-        ext = ext.lower()
         f = os.path.relpath(file, directory)
-        if ext in (".opus", ".ogg", ".mp3"):
-            try:
-                if ext == ".opus":
-                    meta = OggOpus(file)
-                elif ext == ".ogg":
-                    meta = OggVorbis(file)
-                elif ext == ".mp3":
-                    meta = EasyID3(file)
-                if "date" in meta and meta["date"] and meta["date"][0].strip():
-                    date_str = meta["date"][0].strip()
-                    year_valid = False
-                    # Try as 4-digit integer year
-                    if re.fullmatch(r"\d{4}", date_str):
-                        year = int(date_str)
-                        if 1900 <= year <= 2100:
+        try:
+            meta = File(file)
+        except Exception as e:
+            print(file)
+            print(e)
+
+        if not meta:
+            continue
+
+        try:
+            if "date" in meta and meta["date"] and meta["date"][0].strip():
+                date_str = meta["date"][0].strip()
+                year_valid = False
+                # Try as 4-digit integer year
+                if re.fullmatch(r"\d{4}", date_str):
+                    year = int(date_str)
+                    if 1900 <= year <= 2100:
+                        year_valid = True
+                # Try as yyyy-mm pattern
+                elif re.fullmatch(r"(\d{4})-(\d{2})", date_str):
+                    m = re.fullmatch(r"(\d{4})-(\d{2})", date_str)
+                    year = int(m.group(1))
+                    month = int(m.group(2))
+                    if 1900 <= year <= 2100 and 1 <= month <= 12:
+                        year_valid = True
+                # Try as yyyy-mm-dd pattern
+                elif re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", date_str):
+                    try:
+                        dt = datetime.strptime(date_str, "%Y-%m-%d")
+                        if 1900 <= dt.year <= 2100:
                             year_valid = True
-                    # Try as yyyy-mm pattern
-                    elif re.fullmatch(r"(\d{4})-(\d{2})", date_str):
-                        m = re.fullmatch(r"(\d{4})-(\d{2})", date_str)
-                        year = int(m.group(1))
-                        month = int(m.group(2))
-                        if 1900 <= year <= 2100 and 1 <= month <= 12:
-                            year_valid = True
-                    # Try as yyyy-mm-dd pattern
-                    elif re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", date_str):
-                        try:
-                            dt = datetime.strptime(date_str, "%Y-%m-%d")
-                            if 1900 <= dt.year <= 2100:
-                                year_valid = True
-                        except ValueError:
-                            year_valid = False
-                    if year_valid:
-                        valid_dates += 1
-                    else:
-                        entry = f"Malformed or improbable date '{date_str}' in: {f}"
-                        log_entries.append(entry)
+                    except ValueError:
+                        year_valid = False
+                if year_valid:
+                    valid_dates += 1
                 else:
-                    entry = f"Missing date tag in: {f}"
+                    entry = f"Malformed or improbable date '{date_str}' in: {f}"
                     log_entries.append(entry)
-            except Exception as e:
-                entry = f"[Error reading file: {f}] Reason: {e}"
+            else:
+                entry = f"Missing date tag in: {f}"
                 log_entries.append(entry)
+        except Exception as e:
+            entry = f"[Error reading file: {f}] Reason: {e}"
+            log_entries.append(entry)
+    # End for 
 
     summary = [
         f"Total valid date tags: {valid_dates}",
@@ -871,14 +891,18 @@ def open_shell(cwd):
 # End open_shell()
 
 
-def print_tags(filename: str):
+def print_tags(file: str):
     """
     Prints all metadata tags for {filename}
     """
     # Get extension and filename
-    _, ext = os.path.splitext(filename)
-    fn = os.path.basename(filename)
-    meta = File(filename)
+    _, ext = os.path.splitext(file)
+    fn = os.path.basename(file)
+    try:
+        meta = File(file)
+    except Exception as e:
+        print(file)
+        print(e)
 
     # Errors only on suppoerted file types 
     if meta is None and ext.lower() in (".opus", ".ogg", ".mp3"):
@@ -1068,6 +1092,7 @@ def do_beets_menu(directory: str, dname: str):
 
 def do_metadata_menu(full: str, dname: str):
     return_msg = "[b green]\nENTER to return to Metadata Menu[/]"
+    os.chdir(full)
 
     # Menu loop
     while True:
@@ -1081,12 +1106,13 @@ def do_metadata_menu(full: str, dname: str):
   [#f5d676]Current Album Directory:[/]
   [cyan]{dname}[/]
 
-  [b #f5d676]1[/] = [b]Display all tags[/] for current tracks
-  [b #f5d676]2[/] = [b]Display dates[/] for current tracks
-  [b #f5d676]3[/] = [b]Set date[/] on current tracks
-  [b #f5d676]4[/] = [b]Set track number[/] on current tracks
-  [b #f5d676]5[/] = [b]Set common tags[/] on current tracks
-  [b #f5d676]6[/] = [b]Remove YT tags[/] on current tracks
+  [b #f5d676]1[/] = [b]Select track[/] to display
+  [b #f5d676]2[/] = [b]Display all tags[/] for current tracks
+  [b #f5d676]3[/] = [b]Display dates[/] for current tracks
+  [b #f5d676]4[/] = [b]Set date[/] on current tracks
+  [b #f5d676]5[/] = [b]Set track number[/] on current tracks
+  [b #f5d676]6[/] = [b]Set common tags[/] on current tracks
+  [b #f5d676]7[/] = [b]Remove YT tags[/] on current tracks
 
   [b #f5d676]B[/] = [#90ee90 b]Back to Main Menu[/]
         """
@@ -1101,15 +1127,28 @@ def do_metadata_menu(full: str, dname: str):
 
         ## Action choices
         if action == "1":
+            # Select file and display tags
+            name_input = filename_prompt("File name (TAB for drop-down menu): ", full)
+            file = os.path.basename(os.path.normpath(name_input))
+            print_tags(file)
+            print()
+            print(return_msg)
+            input()
+
+        elif action == "2":
             # Display all tags
             files = get_files_in_dir(full)
             for file in files:
+                _, ext = os.path.splitext(file)
+                ext = ext.lower()
+                if ext in (".jpg", ".jpeg", ".png", ".gif", ".svg"):
+                    continue
                 print_tags(file)
                 input()
             print(return_msg)
             input()
 
-        if action == "2":
+        elif action == "3":
             # List dates for all tracsk in dir
             all_dates = get_all_dates(full)
             print(f"[b blue]\nDates in {music}/{dname}[/]")
@@ -1119,7 +1158,7 @@ def do_metadata_menu(full: str, dname: str):
             print(return_msg)
             input()
 
-        elif action == "3":
+        elif action == "4":
             # Set dates on all tracks
             if (full+'/') == music_root:
                 print(f"[b red]Don't change the dates of all files in {music}![/]")
@@ -1144,7 +1183,7 @@ def do_metadata_menu(full: str, dname: str):
                 print(return_msg)
                 input()
 
-        elif action == "4":
+        elif action == "5":
             # Set track number field
             print(
                 f"[yellow]All tracks in[/] [cyan]{dname}[/] [yellow]whose file names start with a[/]"
@@ -1161,7 +1200,7 @@ def do_metadata_menu(full: str, dname: str):
                 print(return_msg)
                 input()
 
-        elif action == "5":
+        elif action == "6":
             # Set common tags
             if full == music_root:
                 print("[b red]Don't change the tags of all files in {music}![/]")
@@ -1173,7 +1212,7 @@ def do_metadata_menu(full: str, dname: str):
             print(return_msg)
             input()
 
-        elif action == "6":
+        elif action == "7":
             # Strip out YT tags 
             print("[yellow]Remove tags with YT metadata?[/]")
             print("[[green]Y[/]/n]")
@@ -1242,9 +1281,12 @@ def do_dload_menu(dirname: str, dname: str) -> str:
                 if album_name is None:
                     continue
 
-                # Set tracknumber field in metadata
+                # Set tracknumber field in metadata, kill *.webp 
                 with c.status("\n[b #f5d676]Setting track number metadata[/]"):
+                    for webp in glob.glob("*.webp"):
+                        os.remove(webp)
                     set_tracknum(tmp_dir)
+
                 print("[b green]\nDownload complete. ENTER to continue[/]")
                 input()
 

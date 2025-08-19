@@ -1,7 +1,12 @@
 ## Album Tools  
 
-August 2025: v0.2.1 with minor fixes. Need to update README.
-August 2025: v0.2.0 Release with Beets integration!  
+**August 2025:**  
+v0.2.2 Added FLAC support. Still need to update README!
+v0.2.1 with minor fixes. Need to update README.  
+v0.2.0 Release with Beets integration!  
+    To configure Beets, see: https://beets.readthedocs.io/en/stable/guides/main.html#configuring   
+    Be sure to understand what Beets does when it imports, and have the config file set up the  
+    way you want.
 
 ### About  
 
@@ -30,17 +35,31 @@ August 2025: v0.2.0 Release with Beets integration!
 3. Configure `album-tools`
    - Before using, you will need to set the correct values for these variables near the top of the `album-tools` script using your favourite text editor:  
    ```python
-   ### -------- User settings -------- ###
-   # Set 'music_root' to the full path to your music collection directory.
-   # Include trailing slash
-   music_root = '/full/path/to/your/music/directory/'
-   # Set paths to your shell and `ffmpeg`
-   SHELL = '/usr/bin/bash'
-   FFMPEG = '/usr/bin/ffmpeg'
-   # Set preferred supported encoding
-   CODEC = 'opus'
-   #CODEC = 'vorbis'
-   #CODEC = 'mp3'
+   ### -------- User settings --------###
+   # Define home directory and config paths
+   config_dir  = Path.home() / ".album_tools"
+   config_path = config_dir / "settings.py"
+
+   ## Set 'music_root' to the full path of your music collection directory.
+   ## Include trailing slash
+   music_root  = ""
+   # Example:
+   #music_root  = str(Path.home() / "Music_Collection") + "/"
+
+   ## Set paths to your shell and `ffmpeg`
+   SHELL       = "/usr/bin/bash"
+   FFMPEG      = "/usr/bin/ffmpeg"
+
+   ## Set preferred codec for re-encoding downloads
+   CODEC       = "opus"
+   #CODEC       = 'vorbis'
+   #CODEC       = "flac"
+   #CODEC       = 'mp3'
+
+   ## Beets paths
+   # Set these examples to your needed values
+   beets_cf    = Path.home() / ".config/beets/config.yaml"
+   beets_db    = Path.home() / ".beets/musiclibrary.db"
    ### ---------------- ###
    ```  
    - If you are unsure of the path to your shell (`bash`, `zsh`, `tcsh`, etc.) or the location of `ffmpeg`,  you can enter the following commands to find out:  
@@ -87,10 +106,10 @@ August 2025: v0.2.0 Release with Beets integration!
 - Escape to an interactive shell at any time from within the app for flexibility
 - Tab-completion for filesystem paths while entering commands
 - Coloured output for improved readability
-- Configurable file format (Opus, Vorbis, MP3) with high-quality variable bitrate output
+- Configurable file formats: Opus, Vorbis, FLAC, or MP3
 
 
-### Recommended Reading  
+### Recommended Resources 
   
 Media Players (Open Source, Ad Free):  
   - VLC (Multi-platform, My personal choice)  
