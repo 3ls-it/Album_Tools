@@ -408,8 +408,8 @@ def do_yt_dlp(
                 "preferredquality": qual,
             }
         )
-        #ydl_opts["postprocessor_args"] = ["-c:a", "libopus", "-b:a", qual]
-        ydl_opts["postprocessor_args"] = ["-c:a", "libopus", "-b:a", qual, "-map", "a", "-af",  "loudnorm=I=-14:TP=-2.0:LRA=11"]
+        ydl_opts["postprocessor_args"] = ["-c:a", "libopus", "-b:a", qual]
+        #ydl_opts["postprocessor_args"] = ["-c:a", "libopus", "-b:a", qual, "-map", "a", "-af",  "loudnorm=I=-14:TP=-2.0:LRA=11"]
 
     elif codec == "vorbis":
         # Vorbis VBR quality (0–10), default 6 ≈ 192 kbps VBR
